@@ -1,5 +1,6 @@
 from datetime import datetime, date, timedelta
 import requests
+from dataclasses import dataclass
 
 from client import CalendarClient
 import settings
@@ -52,6 +53,90 @@ def get_location_data(location: str):
         "link": f'{API_URL}{response_json.get("redirect_url", "")}'
     }
 
+MOVEMENT_TYPES = {
+    "SCHIFF": "Schiff",
+    "RUFTAXI": "Ruftaxi",
+    "BAHN": "Bahn",
+    "UBAHN": "U-Bahn",
+    "TRAM": "Tram",
+    "SBAHN": "S-Bahn",
+    "BUS": "Bus",
+    "REGIONAL_BUS": "Regional Bus"
+}
+
+@dataclass
+class Location():
+    name: str
+    place: str
+    coordinates: tuple
+
+    def __str__(self):
+        return f"{self.name}, {self.place}"
+
+@dataclass
+class Movement():
+    movement_type: str
+    name: str
+    destination: str
+
+    def __str__(self):
+        return f"{MOVEMENT_TYPES[self.movement_type]} {self.name} -> {self.destination}"
+
+@dataclass
+class RoutePart():
+    departure: datetime
+    arrival: datetime
+    start: Location
+    end: Location
+    movement: Movement
+
+class Route():
+    parts = None
+    def __init__(self, route_data):
+        self.parts = []
+
+        for part in route_data["parts"]:
+            self.parts.append(RoutePart(
+                datetime.fromisoformat(part["from"]["plannedDeparture"]),
+                datetime.fromisoformat(part["to"]["plannedDeparture"]) + timedelta(minutes=int(part["to"].get("arrivalDelayInMinutes", 0))),
+                Location(
+                    part["from"]["name"],
+                    part["from"]["place"],
+                    (part["from"]["latitude"], part["from"]["longitude"])
+                ),
+                Location(
+                    part["to"]["name"],
+                    part["to"]["place"],
+                    (part["to"]["latitude"], part["to"]["longitude"])
+                ),
+                Movement(
+                    part["line"]["transportType"],
+                    part["line"]["label"],
+                    part["line"]["destination"]
+                )
+            ))
+
+    def getDeparture(self):
+        return self.parts[0].departure
+
+    def getArrival(self):
+        return self.parts[-1].arrival
+
+    def getDuration(self):
+        return self.getArrival() - self.getDeparture()
+
+def get_routes(origin, destination, arrival_time):
+    response_json = requests.get("https://www.mvg.de/api/fib/v2/connection", params={
+        "originLatitude": origin[0],
+        "originLongitude": origin[1],
+        "destinationLatitude": destination[0],
+        "destinationLongitude": destination[1],
+        "routingDateTime": (arrival_time - timedelta(hours=1)).isoformat() + "Z",
+        "routingDateTimeIsArrival": True,
+        "transportTypes": "SCHIFF,RUFTAXI,BAHN,UBAHN,TRAM,SBAHN,BUS,REGIONAL_BUS"
+    }, headers={"User-Agent": USER_AGENT}).json()
+    return [Route(route) for route in response_json]
+
 def main():
     #todays_date = date.today() + timedelta(days=3)
     #todays_events = get_events_on_day(settings.TUM_CALENDAR_ID, todays_date)
@@ -60,22 +145,10 @@ def main():
     #print(locations)
     #location_data = get_location_data(locations[0])
     #print(location_data)
-    
-    arrival_time = datetime.now() + timedelta(hours=2) - timedelta(hours=1) # idk why but mvg does it as well
-    print(arrival_time.isoformat() + "Z")
+
     # get route for given arrival time
-    response_json = requests.get("https://www.mvg.de/api/fib/v2/connection", params={
-        "originLatitude": 0,
-        "originLongitude": 0,
-        "destinationLatitude": 0,
-        "destinationLongitude": 0,
-        "routingDateTime": arrival_time.isoformat() + "Z",
-        "routingDateTimeIsArrival": True,
-        "transportTypes": "SCHIFF,RUFTAXI,BAHN,UBAHN,TRAM,SBAHN,BUS,REGIONAL_BUS"
-    }, headers={"User-Agent": USER_AGENT}).json()
-    print(response_json)
-    # TODO: Parsing a single Route to something like
-    # [{"departure": from.plannedDeparture, "arrival": to.plannedDeparture, "from": f"{from.name}, {from.place}", "to": f"{to.name}, {to.place}", "transportationName": f"{line.transportType} {line.label} {line.transportType}"}, ...]
+    routes = get_routes((0, 0), (0, 0), datetime.now())
+    print(routes)
 
 if __name__ == "__main__":
     main()
