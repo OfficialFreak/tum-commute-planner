@@ -99,24 +99,36 @@ class Route():
     def getDuration(self):
         return self.getArrival() - self.getDeparture()
 
-def get_routes(origin, destination, arrival_time):
-    response_json = requests.get("https://www.mvg.de/api/fib/v2/connection", params={
-        "originLatitude": origin[0],
-        "originLongitude": origin[1],
-        "destinationLatitude": destination[0],
-        "destinationLongitude": destination[1],
-        "routingDateTime": (arrival_time - timedelta(hours=1)).isoformat() + "Z",
-        "routingDateTimeIsArrival": True,
-        "transportTypes": "SCHIFF,RUFTAXI,BAHN,UBAHN,TRAM,SBAHN,BUS,REGIONAL_BUS"
-    }, headers={"User-Agent": settings.USER_AGENT}).json()
+def get_routes(origin, destination, arrival_time, type):
+    try:
+        response = requests.get("https://www.mvg.de/api/fib/v2/connection", params={
+            "originLatitude": origin[0],
+            "originLongitude": origin[1],
+            "destinationLatitude": destination[0],
+            "destinationLongitude": destination[1],
+            "routingDateTime": (arrival_time - timedelta(hours=1)).isoformat() + "Z",
+            "routingDateTimeIsArrival": type == "ARRIVAL",
+            "transportTypes": "SCHIFF,RUFTAXI,BAHN,UBAHN,TRAM,SBAHN,BUS,REGIONAL_BUS"
+        }, headers={"User-Agent": settings.USER_AGENT})
+        response_json = response.json()
+    except Exception as ex:
+        print(ex)
+        print(response.status_code, response.headers, response.content)
+        raise Exception("Invalid MVG API Response")
     return [Route(route) for route in response_json]
 
-def get_best_route(routes: List[Route], arrival: datetime) -> Route:
-    filtered_routes = filter(lambda route: route.getArrival() <= arrival.replace(tzinfo=utc), routes)
-    return max(filtered_routes, key=lambda route: route.getDeparture())
+def get_best_route(routes: List[Route], time: datetime, type: str) -> Route:
+    if(type == "ARRIVAL"):
+        filtered_routes = filter(lambda route: route.getArrival() <= time.replace(tzinfo=utc), routes)
+        return max(filtered_routes, key=lambda route: route.getDeparture())
+    
+    filtered_routes = filter(lambda route: route.getDeparture() >= time.replace(tzinfo=utc), routes)
+    return min(filtered_routes, key=lambda route: route.getArrival())
 
-def get_route(origin, destination, arrival_time):
-    best_route = get_best_route(get_routes(origin, destination, arrival_time), arrival_time)
-    if(best_route is None): # If no route could be found, check 30mins earlier
-        return get_route(origin, destination, arrival_time - timedelta(minutes=30))
+def get_route(origin, destination, time, type="ARRIVAL"):
+    best_route = get_best_route(get_routes(origin, destination, time, type), time, type)
+    if(best_route is None): # If no route could be found, check 30mins earlier/later
+        if(type == "ARRIVAL"):
+            return get_route(origin, destination, time - timedelta(minutes=30), type)
+        return get_route(origin, destination, time + timedelta(minutes=30), type)
     return best_route
