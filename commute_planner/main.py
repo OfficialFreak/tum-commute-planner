@@ -3,9 +3,9 @@ from dataclasses import dataclass
 from datetime import datetime, date, timedelta
 import requests
 
-from calendar_client import CalendarClient
-from route_api import get_route
-import settings
+from .calendar_client import CalendarClient
+from .route_api import get_route
+from . import settings
 
 
 def remove_streams(events):
@@ -33,7 +33,7 @@ def get_events_on_day(calendar_id: str, day: date):
             timeMin=time_min.isoformat() + "Z",
             timeMax=time_max.isoformat() + "Z",
             singleEvents=True,
-            orderBy="startTime"
+            orderBy="startTime",
         )
         .execute()
     )
@@ -67,14 +67,14 @@ def get_routes_for_day(day: date):
         minutes=settings.TIME_MARGIN_BEFORE)
     location_data = get_location_data(get_location(todays_events[0]))
 
-    routes.append(get_route(settings.HOME, location_data[0], arrival_time))
+    routes.append(get_route(settings.HOME_POS, location_data[0], arrival_time))
 
     # From last event to home
     departure_time = datetime.fromisoformat(todays_events[-1]["end"]["dateTime"]).replace(tzinfo=None) + timedelta(
         minutes=settings.TIME_MARGIN_AFTER)
     location_data = get_location_data(get_location(todays_events[-1]))
 
-    routes.append(get_route(location_data[0], settings.HOME, departure_time, type_="DEPARTURE"))
+    routes.append(get_route(location_data[0], settings.HOME_POS, departure_time, type_="DEPARTURE"))
 
     return routes
 

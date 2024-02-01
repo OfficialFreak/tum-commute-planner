@@ -3,15 +3,15 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 
-import os.path
+import os
 
 
-def singleton(cls, *args, **kw):
+def singleton(cls):
     instances = {}
 
-    def _singleton(*args, **kw):
+    def _singleton(*args, **kwargs):
         if cls not in instances:
-            instances[cls] = cls(*args, **kw)
+            instances[cls] = cls(*args, **kwargs)
         return instances[cls]
 
     return _singleton

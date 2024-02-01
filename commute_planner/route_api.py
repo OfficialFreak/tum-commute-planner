@@ -4,7 +4,7 @@ import requests
 from dataclasses import dataclass
 from pytz import utc
 
-import settings
+from . import settings
 
 MOVEMENT_TYPES = {
     "SCHIFF": "Schiff",
