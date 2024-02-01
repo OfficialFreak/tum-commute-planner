@@ -5,18 +5,22 @@ from googleapiclient.discovery import build
 
 import os.path
 
+
 def singleton(cls, *args, **kw):
-     instances = {}
-     def _singleton(*args, **kw):
+    instances = {}
+
+    def _singleton(*args, **kw):
         if cls not in instances:
-             instances[cls] = cls(*args, **kw)
+            instances[cls] = cls(*args, **kw)
         return instances[cls]
-     return _singleton
+
+    return _singleton
+
 
 @singleton
-class CalendarClient(object):
+class CalendarClient:
     """ Class for simplifying the calendar client setup """
-    SCOPES = ["https://www.googleapis.com/auth/calendar"] # Full Access to all calendars
+    SCOPES = ["https://www.googleapis.com/auth/calendar"]  # Full Access to all calendars
     creds: Credentials = None
     service = None
 
@@ -41,7 +45,7 @@ class CalendarClient(object):
                 )
                 creds = flow.run_local_server(port=0)
             # Save the credentials for the next run
-            with open("token.json", "w") as token:
-                token.write(creds.to_json())
+            with open("token.json", "w") as f:
+                f.write(creds.to_json())
 
         return creds
