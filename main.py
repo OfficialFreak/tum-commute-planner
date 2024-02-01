@@ -1,6 +1,6 @@
+from dataclasses import dataclass
 from datetime import datetime, date, timedelta
 import requests
-from pytz import utc
 
 from calendar_client import CalendarClient
 from route_api import get_route
@@ -54,6 +54,7 @@ def get_routes_for_day(day: datetime):
     routes = []
     # TODO: Option to filter events
     todays_events = get_events_on_day(settings.TUM_CALENDAR_ID, day)
+    print(todays_events)
 
     # From home to first event
     arrival_time = datetime.fromisoformat(todays_events[0]["start"]["dateTime"]).replace(tzinfo=None) - timedelta(minutes=settings.TIME_MARGIN_BEFORE)
@@ -68,6 +69,18 @@ def get_routes_for_day(day: datetime):
     routes.append(get_route(location_data[0], settings.HOME, departure_time, type="DEPARTURE"))
 
     return routes
+
+@dataclass
+class Event:
+    calendar_id: str
+    event_id: str
+    start: datetime
+    end: datetime
+    reminders: dict
+    sendUpdates: str # all, externalOnly, none
+
+    def save():
+        pass
 
 def main():
     todays_date = date.today() + timedelta(days=1)
