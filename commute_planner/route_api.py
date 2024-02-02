@@ -4,18 +4,20 @@ import requests
 from dataclasses import dataclass
 from pytz import utc
 
+from .utils import bold
+
 from . import settings
 
 MOVEMENT_TYPES = {
-    "SCHIFF": "Schiff",
-    "RUFTAXI": "Ruftaxi",
-    "BAHN": "Bahn",
-    "UBAHN": "U-Bahn",
-    "TRAM": "Tram",
-    "SBAHN": "S-Bahn",
-    "BUS": "Bus",
-    "REGIONAL_BUS": "Regional Bus",
-    "PEDESTRIAN": "Fussweg"
+    "SCHIFF": "🛥️",
+    "RUFTAXI": "🚕",
+    "BAHN": "🚝",
+    "UBAHN": "🚇",
+    "TRAM": "🚋",
+    "SBAHN": "🚈",
+    "BUS": "🚌",
+    "REGIONAL_BUS": "🚏",
+    "PEDESTRIAN": "🚶‍♂️"
 }
 
 
@@ -35,18 +37,12 @@ class MovementType:
     name: str
     destination: str
 
+    @property
+    def symbol(self) -> str:
+        return MOVEMENT_TYPES.get(self.movement_type, self.movement_type)
+
     def __str__(self) -> str:
-        return f"{self.name}{f' ({self.destination})' if self.destination else ''}"
-        """
-        # Also displays the Movement Type (Such as Bus, Subway, etc.)
-        return f"{
-                MOVEMENT_TYPES.get(self.movement_type, self.movement_type)
-            }{
-                f' {self.name}'
-            }{
-                f' Richtung {self.destination}' if self.destination else ''
-            }"
-        """
+        return f"{self.symbol} {self.name}{f' ({self.destination})' if self.destination else ''}"
 
 
 @dataclass
@@ -58,7 +54,11 @@ class RoutePart:
     movement_type: MovementType
 
     def __str__(self) -> str:
-        return f"{self.departure.strftime('%H:%M')} - {self.arrival.strftime('%H:%M')} | {self.movement_type} -> {self.end.name}"
+        return f"{self.departure.strftime('%H:%M')} - {self.arrival.strftime('%H:%M')} {self.movement_type} ➜ {self.end.name}"
+    
+    @property
+    def calendar_repr(self) -> str:
+        return f"{self.departure.strftime('%H:%M')} {bold(self.movement_type)} ➜ {self.end.name}"
 
 
 class Route:
@@ -91,6 +91,20 @@ class Route:
 
     def __str__(self) -> str:
         return '\n'.join([str(route_part) for route_part in self.parts])
+    
+    @property
+    def calendar_description(self) -> str:
+        return '\n'.join([route_part.calendar_repr for route_part in self.parts]) + f"\n\n{bold('Ankunft:')} " + self.parts[-1].arrival.strftime('%H:%M') + " Uhr"
+    
+    @property
+    def calendar_summary(self) -> str:
+        movements = [
+            f"{part.movement_type.symbol} {part.movement_type.name}" 
+            if part.movement_type.movement_type != "PEDESTRIAN"
+            else f"{part.movement_type.symbol} {int((part.arrival - part.departure).total_seconds() // 60)}"
+            for part in self.parts
+        ]
+        return ' ➜ '.join(movements)
 
     @property
     def departure(self) -> datetime:

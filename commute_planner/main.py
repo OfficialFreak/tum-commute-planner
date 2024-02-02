@@ -4,8 +4,9 @@ from datetime import datetime, date, timedelta
 import requests
 
 from .calendar_client import CalendarClient
-from .route_api import get_route
+from .route_api import get_route, Route
 from . import settings
+from .utils import *
 
 
 def remove_streams(events):
@@ -60,7 +61,8 @@ def get_routes_for_day(day: date):
     routes = []
     # TODO: Option to filter events
     todays_events = get_events_on_day(settings.TUM_CALENDAR_ID, day)
-    print(todays_events)
+    if(len(todays_events) == 0):
+        return []
 
     # From home to first event
     arrival_time = datetime.fromisoformat(todays_events[0]["start"]["dateTime"]).replace(tzinfo=None) - timedelta(
@@ -78,24 +80,30 @@ def get_routes_for_day(day: date):
 
     return routes
 
+def add_route_to_calendar(route: Route):
+    event = {
+        'summary': f"{route.calendar_summary}",
+        'location': str(route.parts[-1].end),
+        'description': f"{underlined(bold('Routenbeschreibung'))}\n\n{route.calendar_description}",
+        'start': {
+            'dateTime': (route.departure - timedelta(hours=1)).isoformat(),
+            'timeZone': 'UTC',
+        },
+        'end': {
+            'dateTime': (route.arrival - timedelta(hours=1)).isoformat(),
+            'timeZone': 'UTC',
+        },
+        'sendUpdates': "all"
+    }
 
-@dataclass
-class Event:
-    calendar_id: str
-    event_id: str
-    start: datetime
-    end: datetime
-    reminders: dict
-    send_updates: typing.Literal["all", "externalOnly", "none"]  # all, externalOnly, none
-
-    def save(self):
-        pass
-
+    event = CalendarClient().service.events().insert(calendarId=settings.ROUTE_CALENDAR_ID, body=event).execute()
+    return event
 
 def main():
-    todays_date = date.today() + timedelta(days=1)
-    print('\n\n'.join([str(route) for route in get_routes_for_day(todays_date)]))
-
+    todays_date = date.today()
+    for route in get_routes_for_day(todays_date):
+        add_route_to_calendar(route)
+        print("Added route to calendar")
 
 if __name__ == "__main__":
     main()
