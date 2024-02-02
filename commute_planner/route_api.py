@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from pytz import utc
 from geopy import distance
 
-from .utils import bold
+from .utils import bold, italic
 
 from . import settings
 
@@ -95,7 +95,7 @@ class Route:
     
     @property
     def calendar_description(self) -> str:
-        return '\n'.join([route_part.calendar_repr for route_part in self.parts]) + f"\n\n{bold('Ankunft:')} " + self.parts[-1].arrival.strftime('%H:%M') + " Uhr"
+        return '\n'.join([route_part.calendar_repr for route_part in self.parts]) + f"\n\n{bold('Ankunft:')} " + self.parts[-1].arrival.strftime('%H:%M') + f" Uhr\n" + italic(f"Dauer: {self.duration}")
     
     @property
     def calendar_summary(self) -> str:
@@ -114,6 +114,10 @@ class Route:
     @property
     def arrival(self) -> datetime:
         return self.parts[-1].arrival
+    
+    @property
+    def duration(self) -> timedelta:
+        return self.arrival - self.departure
 
 
 def get_routes(origin, destination, arrival_time, type_: Literal["ARRIVAL", "DEPARTURE"]):
