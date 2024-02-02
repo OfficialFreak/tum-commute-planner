@@ -1,6 +1,5 @@
-import typing
-from dataclasses import dataclass
 from datetime import datetime, date, timedelta
+from typing import Optional
 import requests
 
 from .calendar_client import CalendarClient
@@ -18,31 +17,62 @@ def get_location(event):
     if location_field is None:
         # TODO: Implement Fallback (e.g. to an env variable)
         return None
-    return location_field.split("(")[-1][:-1]  # Gets content in last braces
+    if location_field.find("(") != -1:
+        return get_tum_location(location_field.split("(")[-1][:-1])
+    
+    # Try to interpret Location using MVG API
+    response = requests.get("https://www.mvg.de/api/fib/v2/location", params={
+        "query": location_field
+    }, headers={"User-Agent": settings.USER_AGENT})
+    
+    try:
+        response_json = response.json()
+    except Exception as ex:
+        print(ex)
+        print(response.status_code, response.headers, response.content)
+        raise Exception("Invalid MVG API Response") from ex
 
+    return (response_json[0]["latitude"], response_json[0]["longitude"])
 
 def get_events_on_day(calendar_id: str, day: date):
+    tum_calendar = calendar_id == settings.TUM_CALENDAR_ID
     calendar_client = CalendarClient()
 
     time_min = datetime.combine(day, datetime.min.time())
     time_max = datetime.combine(day, datetime.max.time())
 
-    events_result = (
-        calendar_client.service.events()
-        .list(
-            calendarId=calendar_id,
-            timeMin=time_min.isoformat() + "Z",
-            timeMax=time_max.isoformat() + "Z",
-            singleEvents=True,
-            orderBy="startTime",
+    if tum_calendar:
+        events_result = (
+            calendar_client.service.events()
+            .list(
+                calendarId=calendar_id,
+                timeMin=time_min.isoformat() + "Z",
+                timeMax=time_max.isoformat() + "Z",
+                singleEvents=True,
+                orderBy="startTime",
+            )
+            .execute()
         )
-        .execute()
-    )
 
-    return remove_streams(events_result.get("items", []))
+        return remove_streams(events_result.get("items", []))
+    
+    events_result = (
+            calendar_client.service.events()
+            .list(
+                calendarId=calendar_id,
+                timeMin=time_min.isoformat() + "Z",
+                timeMax=time_max.isoformat() + "Z",
+                singleEvents=True,
+                orderBy="startTime"
+            )
+            .execute()
+        )
 
+    events = [event for event in events_result.get("items", []) if "route_relevant" in event.get("description", "")]
 
-def get_location_data(location: str):
+    return events
+
+def get_tum_location(location: str):
     API_URL = "https://nav.tum.de"
     response = requests.get(
         f"{API_URL}/api/get/{location}",
@@ -53,32 +83,51 @@ def get_location_data(location: str):
     )
     response_json = response.json()
     coords = response_json.get("coords", None)
-    return (coords["lat"], coords["lon"]), f'{API_URL}{response_json.get("redirect_url", "")}'
+    return (coords["lat"], coords["lon"])
 
 
 def get_routes_for_day(day: date):
-    # Implemented as array because I'm thinking about adding routes between events as well
     routes = []
     # TODO: Option to filter events
     todays_events = get_events_on_day(settings.TUM_CALENDAR_ID, day)
+    todays_events.extend(get_events_on_day(settings.MAIN_CALENDAR_ID, day))
+    todays_events.sort(key=lambda x: datetime.fromisoformat(x["start"]["dateTime"]))
     if(len(todays_events) == 0):
         return []
 
     # From home to first event
     arrival_time = datetime.fromisoformat(todays_events[0]["start"]["dateTime"]).replace(tzinfo=None) - timedelta(
         minutes=settings.TIME_MARGIN_BEFORE)
-    location_data = get_location_data(get_location(todays_events[0]))
-
-    routes.append(get_route(settings.HOME_POS, location_data[0], arrival_time))
+    location_data = get_location(todays_events[0])
+    route = get_route(settings.HOME_POS, location_data, arrival_time)
+    if route is not None:
+        routes.append(route)
 
     # From last event to home
     departure_time = datetime.fromisoformat(todays_events[-1]["end"]["dateTime"]).replace(tzinfo=None) + timedelta(
         minutes=settings.TIME_MARGIN_AFTER)
-    location_data = get_location_data(get_location(todays_events[-1]))
+    location_data = get_location(todays_events[-1])
+    route = get_route(location_data, settings.HOME_POS, departure_time, type_="DEPARTURE")
+    if route is not None:
+        routes.append(route)
 
-    routes.append(get_route(location_data[0], settings.HOME_POS, departure_time, type_="DEPARTURE"))
+    # Routes between events
+    if len(todays_events) == 1:
+        return routes
+    
+    for i in range(0, len(todays_events)-1): # -1 because the last event doesn't have one after
+        route = route_between_events(todays_events[i], todays_events[i+1])
+        if route is not None:
+            routes.append(route)
 
     return routes
+
+def route_between_events(event1, event2) -> Optional[Route]:
+    event1_location = get_location(event1)
+    event2_location = get_location(event2)
+    departure_time = datetime.fromisoformat(event1["end"]["dateTime"]).replace(tzinfo=None) + timedelta(
+        minutes=settings.TIME_MARGIN_AFTER)
+    return get_route(event1_location, event2_location, departure_time, type_="DEPARTURE")
 
 def add_route_to_calendar(route: Route):
     event = {

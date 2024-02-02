@@ -4,3 +4,4 @@ google-auth-oauthlib~=1.2.0
 python-dotenv~=1.0.1
 pytz~=2023.4
 requests~=2.31.0
+geopy~=2.4.1

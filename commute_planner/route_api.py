@@ -1,8 +1,9 @@
-import typing
+from typing import Optional, Literal
 from datetime import datetime, timedelta
 import requests
 from dataclasses import dataclass
 from pytz import utc
+from geopy import distance
 
 from .utils import bold
 
@@ -115,7 +116,7 @@ class Route:
         return self.parts[-1].arrival
 
 
-def get_routes(origin, destination, arrival_time, type_: typing.Literal["ARRIVAL", "DEPARTURE"]):
+def get_routes(origin, destination, arrival_time, type_: Literal["ARRIVAL", "DEPARTURE"]):
     response = requests.get("https://www.mvg.de/api/fib/v2/connection", params={
         "originLatitude": origin[0],
         "originLongitude": origin[1],
@@ -135,7 +136,7 @@ def get_routes(origin, destination, arrival_time, type_: typing.Literal["ARRIVAL
     return [Route(route) for route in response_json]
 
 
-def get_best_route(routes: list[Route], time: datetime, type_: typing.Literal["ARRIVAL", "DEPARTURE"]) -> Route:
+def get_best_route(routes: list[Route], time: datetime, type_: Literal["ARRIVAL", "DEPARTURE"]) -> Route:
     if type_ == "ARRIVAL":
         filtered_routes = filter(lambda route: route.arrival <= time.replace(tzinfo=utc), routes)
         return max(filtered_routes, key=lambda route: route.departure)
@@ -144,7 +145,9 @@ def get_best_route(routes: list[Route], time: datetime, type_: typing.Literal["A
     return min(filtered_routes, key=lambda route: route.arrival)
 
 
-def get_route(origin, destination, time, type_: typing.Literal["ARRIVAL", "DEPARTURE"] = "ARRIVAL"):
+def get_route(origin, destination, time, type_: Literal["ARRIVAL", "DEPARTURE"] = "ARRIVAL") -> Optional[Route]:
+    if(distance.distance(origin, destination).kilometers <= settings.MIN_ROUTE_DISTANCE):
+        return None
     best_route = get_best_route(get_routes(origin, destination, time, type_), time, type_)
     if best_route is None:  # If no route could be found, check 30 min earlier/later
         if type_ == "ARRIVAL":
