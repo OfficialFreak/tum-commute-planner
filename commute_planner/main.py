@@ -34,7 +34,25 @@ def get_location(event):
 
     return (response_json[0]["latitude"], response_json[0]["longitude"])
 
-def get_events_on_day(calendar_id: str, day: date):
+def get_events_on_day(day: date):
+    todays_events = get_events_from_calendar(settings.TUM_CALENDAR_ID, day)
+    main_calendar_events = get_events_from_calendar(settings.MAIN_CALENDAR_ID, day)
+    
+    for main_calendar_event in main_calendar_events:
+        if "Ausfall" in main_calendar_event.get("summary", ""):
+            todays_events = [tum_event for tum_event in todays_events if not (
+                (main_calendar_event["start"]["dateTime"] == tum_event["start"]["dateTime"]) and
+                (main_calendar_event["end"]["dateTime"] == tum_event["end"]["dateTime"]) and
+                ((len(main_calendar_event) < 8) or (main_calendar_event["summary"][8:] in tum_event.get("summary", "")))
+            )]
+
+    todays_events.extend([main_calendar_event for main_calendar_event in main_calendar_events if not ("Ausfall" in main_calendar_event.get("summary", ""))])
+
+    todays_events.sort(key=lambda x: datetime.fromisoformat(x["start"]["dateTime"]))
+
+    return todays_events
+
+def get_events_from_calendar(calendar_id: str, day: date):
     tum_calendar = calendar_id == settings.TUM_CALENDAR_ID
     calendar_client = CalendarClient()
 
@@ -68,7 +86,7 @@ def get_events_on_day(calendar_id: str, day: date):
             .execute()
         )
 
-    events = [event for event in events_result.get("items", []) if "route_relevant" in event.get("description", "")]
+    events = [event for event in events_result.get("items", []) if "route_relevant" in event.get("description", "") or "Ausfall" in event.get("summary", "")]
 
     return events
 
@@ -88,10 +106,7 @@ def get_tum_location(location: str):
 
 def get_routes_for_day(day: date):
     routes = []
-    # TODO: Option to filter events
-    todays_events = get_events_on_day(settings.TUM_CALENDAR_ID, day)
-    todays_events.extend(get_events_on_day(settings.MAIN_CALENDAR_ID, day))
-    todays_events.sort(key=lambda x: datetime.fromisoformat(x["start"]["dateTime"]))
+    todays_events = get_events_on_day(day)
     if(len(todays_events) == 0):
         return []
 
@@ -149,7 +164,7 @@ def add_route_to_calendar(route: Route):
     return event
 
 def main():
-    todays_date = date.today()
+    todays_date = date.today() - timedelta(days=4)
     for route in get_routes_for_day(todays_date):
         add_route_to_calendar(route)
         print("Added route to calendar")
