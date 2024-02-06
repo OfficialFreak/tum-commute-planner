@@ -45,7 +45,7 @@ def get_events_on_day(day: date):
                     (main_calendar_event["start"]["dateTime"] == tum_event["start"]["dateTime"]) and
                     (main_calendar_event["end"]["dateTime"] == tum_event["end"]["dateTime"]) and
                     ((len(main_calendar_event) < 8) or (
-                                main_calendar_event["summary"][8:] in tum_event.get("summary", "")))
+                            main_calendar_event["summary"][8:] in tum_event.get("summary", "")))
             )]
 
     todays_events.extend([main_calendar_event for main_calendar_event in main_calendar_events if
@@ -79,8 +79,9 @@ def get_events_from_calendar(calendar_id: str, day: date):
     if tum_calendar:
         events = remove_streams(events_result.get("items", []))
     elif main_calendar:
-        events = [event for event in events_result.get("items", []) if "route_relevant" in event.get("description", "") or "Ausfall" in event.get("summary", "")]
-    
+        events = [event for event in events_result.get("items", []) if
+                  "route_relevant" in event.get("description", "") or "Ausfall" in event.get("summary", "")]
+
     return events
 
 
@@ -160,28 +161,43 @@ def add_route_to_calendar(route: Route):
     event = CalendarClient().service.events().insert(calendarId=settings.ROUTE_CALENDAR_ID, body=event).execute()
     return event
 
+
 def event_equals_route(event, route: Route) -> bool:
     # Check start and end-time
-    start_time_check = datetime.fromisoformat(event["start"]["dateTime"]) == route.departure
-    end_time_check = datetime.fromisoformat(event["end"]["dateTime"]) == route.arrival
+    start_time_check = datetime.fromisoformat(event["start"]["dateTime"]).replace(
+        tzinfo=None) == route.departure.replace(tzinfo=None)
+    end_time_check = datetime.fromisoformat(event["end"]["dateTime"]).replace(tzinfo=None) == route.arrival.replace(
+        tzinfo=None)
     # Compare Summary
     summary_check = event.get("summary", "") == route.calendar_summary
-    print(event, route)
     return start_time_check and end_time_check and summary_check
+
 
 def refresh_day(day):
     route_calendar_events = get_events_from_calendar(settings.ROUTE_CALENDAR_ID, day)
     tmp_routes = get_routes_for_day(day)
-    print(event_equals_route(route_calendar_events[0], tmp_routes[0]))
-    #for
+
+    for event in route_calendar_events:
+        for route in tmp_routes:
+            if event_equals_route(event, route):
+                # If they equal, the event doesn't need to be deleted and recreated
+                route_calendar_events.remove(event)
+                tmp_routes.remove(route)
+
+    for event in route_calendar_events:
+        CalendarClient().service.events().delete(calendarId=settings.ROUTE_CALENDAR_ID, eventId=event['id']).execute()
+        print(f"Removed event {event['id']}")
+    for route in tmp_routes:
+        add_route_to_calendar(route)
+        print(f"Created new event {route.calendar_summary}")
+
 
 def main():
-    todays_date = date.today() + timedelta(days=1)
-    #for route in get_routes_for_day(todays_date):
-    #    add_route_to_calendar(route)
-    #    print("Added route to calendar")
-    print(refresh_day(todays_date))
-
+    date_today = date.today() + timedelta(days=1)
+    # for route in get_routes_for_day(date_today):
+    #     add_route_to_calendar(route)
+    #     print("Added route to calendar")
+    refresh_day(date_today)
 
 
 if __name__ == "__main__":
