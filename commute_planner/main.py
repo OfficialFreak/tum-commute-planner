@@ -54,40 +54,29 @@ def get_events_on_day(day: date):
 
 def get_events_from_calendar(calendar_id: str, day: date):
     tum_calendar = calendar_id == settings.TUM_CALENDAR_ID
+    main_calendar = calendar_id == settings.MAIN_CALENDAR_ID
     calendar_client = CalendarClient()
 
     time_min = datetime.combine(day, datetime.min.time())
     time_max = datetime.combine(day, datetime.max.time())
 
-    if tum_calendar:
-        events_result = (
-            calendar_client.service.events()
-            .list(
-                calendarId=calendar_id,
-                timeMin=time_min.isoformat() + "Z",
-                timeMax=time_max.isoformat() + "Z",
-                singleEvents=True,
-                orderBy="startTime",
-            )
-            .execute()
-        )
-
-        return remove_streams(events_result.get("items", []))
-    
     events_result = (
-            calendar_client.service.events()
-            .list(
-                calendarId=calendar_id,
-                timeMin=time_min.isoformat() + "Z",
-                timeMax=time_max.isoformat() + "Z",
-                singleEvents=True,
-                orderBy="startTime"
-            )
-            .execute()
+        calendar_client.service.events()
+        .list(
+            calendarId=calendar_id,
+            timeMin=time_min.isoformat() + "Z",
+            timeMax=time_max.isoformat() + "Z",
+            singleEvents=True,
+            orderBy="startTime",
         )
-
-    events = [event for event in events_result.get("items", []) if "route_relevant" in event.get("description", "") or "Ausfall" in event.get("summary", "")]
-
+        .execute()
+    )
+    events = events_result.get("items", [])
+    if tum_calendar:
+        events = remove_streams(events_result.get("items", []))
+    elif main_calendar:
+        events = [event for event in events_result.get("items", []) if "route_relevant" in event.get("description", "") or "Ausfall" in event.get("summary", "")]
+    
     return events
 
 def get_tum_location(location: str):
@@ -163,11 +152,28 @@ def add_route_to_calendar(route: Route):
     event = CalendarClient().service.events().insert(calendarId=settings.ROUTE_CALENDAR_ID, body=event).execute()
     return event
 
+def event_equals_route(event, route: Route) -> bool:
+    # Check start and end-time
+    start_time_check = datetime.fromisoformat(event["start"]["dateTime"]) == route.departure
+    end_time_check = datetime.fromisoformat(event["end"]["dateTime"]) == route.arrival
+    # Compare Summary
+    summary_check = event.get("summary", "") == route.calendar_summary
+    print(event, route)
+    return start_time_check and end_time_check and summary_check
+
+def refresh_day(day):
+    route_calendar_events = get_events_from_calendar(settings.ROUTE_CALENDAR_ID, day)
+    tmp_routes = get_routes_for_day(day)
+    print(event_equals_route(route_calendar_events[0], tmp_routes[0]))
+    #for
+
 def main():
-    todays_date = date.today() - timedelta(days=4)
-    for route in get_routes_for_day(todays_date):
-        add_route_to_calendar(route)
-        print("Added route to calendar")
+    todays_date = date.today() + timedelta(days=1)
+    #for route in get_routes_for_day(todays_date):
+    #    add_route_to_calendar(route)
+    #    print("Added route to calendar")
+    print(refresh_day(todays_date))
+
 
 if __name__ == "__main__":
     main()
