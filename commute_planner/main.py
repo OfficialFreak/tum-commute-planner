@@ -176,7 +176,6 @@ def event_equals_route(event, route: Route) -> bool:
 def refresh_day(day, known_events):
     existing_events = get_events_from_calendar(settings.ROUTE_CALENDAR_ID, day)
     events_today = get_events_on_day(day)
-    print(events_today, known_events)
     if events_today == known_events:
         print("No events changed, skipping route recalculation")
         return events_today
@@ -227,8 +226,8 @@ async def update_all_but_today_loop():
 
         date_today = date.today() + timedelta(days=0)
         known_events = refresh_week(date_today, known_events)
-        await asyncio.sleep(10 * 60)
         print("Finished a week cycle")
+        await asyncio.sleep(10 * 60)
 
 
 async def update_today_loop():
