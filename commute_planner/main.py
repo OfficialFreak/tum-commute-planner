@@ -3,10 +3,9 @@ from datetime import datetime, date, timedelta
 from typing import Optional
 import requests
 
-from .calendar_client import CalendarClient
+from .calendar_client import CalendarClient, bold, underlined
 from .route_api import get_route, Route
 from . import settings
-from .utils import *
 
 
 def remove_streams(events):
@@ -176,9 +175,6 @@ def event_equals_route(event, route: Route) -> bool:
 def refresh_day(day, known_events):
     existing_events = get_events_from_calendar(settings.ROUTE_CALENDAR_ID, day)
     events_today = get_events_on_day(day)
-    if events_today == known_events:
-        print("No events changed, skipping route recalculation")
-        return events_today
 
     target_routes = get_routes_for_events(events_today)
 
@@ -187,6 +183,10 @@ def refresh_day(day, known_events):
         if route.departure.replace(tzinfo=None) - datetime.now() < timedelta(minutes=30):
             has_upcoming_route = True
             break
+
+    if events_today == known_events:
+        print("No events changed, skipping route recalculation")
+        return events_today, has_upcoming_route
 
     events_to_remove = [event for event in existing_events if not any(event_equals_route(event, route) for route in target_routes)]
     routes_to_add = [route for route in target_routes if not any(event_equals_route(event, route) for event in existing_events)]
@@ -210,7 +210,7 @@ def refresh_week(day_of_week: date, known_events) -> dict[int, list | None]:
             print(current_day, "is in the past or today, skipping")
             continue
         print(f"Refreshing {current_day}")
-        new_events[day] = refresh_day(current_day, known_events[day])
+        new_events[day] = refresh_day(current_day, known_events[day])[0]
 
     return new_events
 
