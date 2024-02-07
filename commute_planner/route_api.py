@@ -59,7 +59,7 @@ class RoutePart:
 
     @property
     def calendar_repr(self) -> str:
-        return f"{self.departure.strftime('%H:%M')} {bold(self.movement_type)} ➜ {self.end.name}"
+        return f"{self.departure.strftime('%H:%M')} {bold(str(self.movement_type))} ➜ {self.end.name}"
 
 
 class Route:
