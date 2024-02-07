@@ -151,7 +151,7 @@ def get_best_route(routes: list[Route], time: datetime, type_: Literal["ARRIVAL"
 
 
 def get_route(origin, destination, time, type_: Literal["ARRIVAL", "DEPARTURE"] = "ARRIVAL") -> Optional[Route]:
-    if (distance.distance(origin, destination).kilometers <= settings.MIN_ROUTE_DISTANCE):
+    if distance.distance(origin, destination).kilometers <= settings.MIN_ROUTE_DISTANCE:
         return None
     best_route = get_best_route(get_routes(origin, destination, time, type_), time, type_)
     if best_route is None:  # If no route could be found, check 30 min earlier/later
