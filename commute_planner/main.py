@@ -218,8 +218,13 @@ def refresh_week(day_of_week: date, known_events) -> dict[int, list | None]:
 
 async def update_all_but_today_loop():
     known_events: dict[int, list | None] = {i: None for i in range(7)}
+    known_events_monday = date.today() - timedelta(days=date.today().weekday())
 
     while 1:
+        if date.today() - timedelta(days=date.today().weekday()) != known_events_monday:
+            known_events = {i: None for i in range(7)}
+            known_events_monday = date.today() - timedelta(days=date.today().weekday())
+
         date_today = date.today() + timedelta(days=0)
         known_events = refresh_week(date_today, known_events)
         await asyncio.sleep(10 * 60)
@@ -228,8 +233,13 @@ async def update_all_but_today_loop():
 
 async def update_today_loop():
     known_events: None | list = None
+    known_events_day = date.today()
 
     while 1:
+        if date.today() != known_events_day:
+            known_events = None
+            known_events_day = date.today()
+
         known_events, today_has_upcoming_route = refresh_day(date.today(), known_events)
         if today_has_upcoming_route:
             await asyncio.sleep(5 * 60)
