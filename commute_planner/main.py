@@ -8,6 +8,18 @@ from .route_api import get_route, Route
 from . import settings
 
 
+class TerminalStyles:
+    HEADER = '\033[95m'
+    OKBLUE = '\033[94m'
+    OKCYAN = '\033[96m'
+    OKGREEN = '\033[92m'
+    WARNING = '\033[93m'
+    FAIL = '\033[91m'
+    ENDC = '\033[0m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
+
+
 def remove_streams(events):
     return [event for event in events if "Videoübertragung aus" not in event.get("description", "")]
 
@@ -180,12 +192,11 @@ def refresh_day(day, known_events):
 
     has_upcoming_route = False
     for route in target_routes:
-        if route.departure.replace(tzinfo=None) - datetime.now() < timedelta(minutes=30):
+        if route.departure.replace(tzinfo=None) > datetime.now() and route.departure.replace(tzinfo=None) - datetime.now() < timedelta(minutes=30):
             has_upcoming_route = True
             break
 
     if events_today == known_events:
-        print("No events changed, skipping route recalculation")
         return events_today, has_upcoming_route
 
     events_to_remove = [event for event in existing_events if not any(event_equals_route(event, route) for route in target_routes)]
@@ -193,10 +204,10 @@ def refresh_day(day, known_events):
 
     for event in events_to_remove:
         CalendarClient().service.events().delete(calendarId=settings.ROUTE_CALENDAR_ID, eventId=event['id']).execute()
-        print(f"Removed event {event['id']}")
+        print(f"[{day}] {TerminalStyles.HEADER}Removed event {event['id']}{TerminalStyles.ENDC}")
     for route in routes_to_add:
         add_route_to_calendar(route)
-        print(f"Created new event {route.calendar_summary}")
+        print(f"[{day}] {TerminalStyles.OKGREEN}Created new event {route.calendar_summary}{TerminalStyles.ENDC}")
 
     return events_today, has_upcoming_route
 
@@ -207,9 +218,9 @@ def refresh_week(day_of_week: date, known_events) -> dict[int, list | None]:
     for day in range(0, 7):
         current_day = monday + timedelta(days=day)
         if current_day <= date.today():
-            print(current_day, "is in the past or today, skipping")
+            print(f"[{current_day}] is in the past or today, skipping")
             continue
-        print(f"Refreshing {current_day}")
+        print(f"[{current_day}] Refreshing...")
         new_events[day] = refresh_day(current_day, known_events[day])[0]
 
     return new_events
@@ -220,13 +231,14 @@ async def update_all_but_today_loop():
     known_events_monday = date.today() - timedelta(days=date.today().weekday())
 
     while 1:
+        print(f"[{known_events_monday}] {TerminalStyles.UNDERLINE}Starting Update All Loop {known_events_monday}{TerminalStyles.ENDC}")
         if date.today() - timedelta(days=date.today().weekday()) != known_events_monday:
             known_events = {i: None for i in range(7)}
             known_events_monday = date.today() - timedelta(days=date.today().weekday())
 
         date_today = date.today() + timedelta(days=0)
         known_events = refresh_week(date_today, known_events)
-        print("Finished a week cycle")
+        print(f"[{known_events_monday}] {TerminalStyles.OKGREEN}Finished Update All Loop{TerminalStyles.ENDC}")
         await asyncio.sleep(10 * 60)
 
 
@@ -235,15 +247,19 @@ async def update_today_loop():
     known_events_day = date.today()
 
     while 1:
+        print(f"[{known_events_day}] {TerminalStyles.UNDERLINE}Starting Update Today Loop{TerminalStyles.ENDC}")
         if date.today() != known_events_day:
             known_events = None
             known_events_day = date.today()
 
         known_events, today_has_upcoming_route = refresh_day(date.today(), known_events)
+        print(f"[{known_events_day}] {TerminalStyles.OKGREEN}Finished Update Today Loop{TerminalStyles.ENDC}")
         if today_has_upcoming_route:
-            await asyncio.sleep(5 * 60)
+            print(f"[{known_events_day}] {TerminalStyles.WARNING}Has upcoming route, 1min waiting times...{TerminalStyles.ENDC}")
+            await asyncio.sleep(1 * 60)
         else:
-            await asyncio.sleep(10 * 60)
+            print(f"[{known_events_day}] No upcoming route, 5min waiting time")
+            await asyncio.sleep(5 * 60)
 
 
 async def main():
