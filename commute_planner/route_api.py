@@ -56,7 +56,7 @@ class RoutePart:
 
     def __str__(self) -> str:
         return f"{self.departure.strftime('%H:%M')} - {self.arrival.strftime('%H:%M')} {self.movement_type} ➜ {self.end.name}"
-    
+
     @property
     def calendar_repr(self) -> str:
         return f"{self.departure.strftime('%H:%M')} {bold(self.movement_type)} ➜ {self.end.name}"
@@ -92,15 +92,16 @@ class Route:
 
     def __str__(self) -> str:
         return '\n'.join([str(route_part) for route_part in self.parts])
-    
+
     @property
     def calendar_description(self) -> str:
-        return '\n'.join([route_part.calendar_repr for route_part in self.parts]) + f"\n\n{bold('Ankunft:')} " + self.parts[-1].arrival.strftime('%H:%M') + f" Uhr\n" + italic(f"Dauer: {self.duration}")
-    
+        return '\n'.join([route_part.calendar_repr for route_part in self.parts]) + f"\n\n{bold('Ankunft:')} " + \
+            self.parts[-1].arrival.strftime('%H:%M') + f" Uhr\n" + italic(f"Dauer: {self.duration}")
+
     @property
     def calendar_summary(self) -> str:
         movements = [
-            f"{part.movement_type.symbol} {part.movement_type.name}" 
+            f"{part.movement_type.symbol} {part.movement_type.name}"
             if part.movement_type.movement_type != "PEDESTRIAN"
             else f"{part.movement_type.symbol} {int((part.arrival - part.departure).total_seconds() // 60)}"
             for part in self.parts
@@ -114,7 +115,7 @@ class Route:
     @property
     def arrival(self) -> datetime:
         return self.parts[-1].arrival
-    
+
     @property
     def duration(self) -> timedelta:
         return self.arrival - self.departure
@@ -150,7 +151,7 @@ def get_best_route(routes: list[Route], time: datetime, type_: Literal["ARRIVAL"
 
 
 def get_route(origin, destination, time, type_: Literal["ARRIVAL", "DEPARTURE"] = "ARRIVAL") -> Optional[Route]:
-    if(distance.distance(origin, destination).kilometers <= settings.MIN_ROUTE_DISTANCE):
+    if (distance.distance(origin, destination).kilometers <= settings.MIN_ROUTE_DISTANCE):
         return None
     best_route = get_best_route(get_routes(origin, destination, time, type_), time, type_)
     if best_route is None:  # If no route could be found, check 30 min earlier/later
