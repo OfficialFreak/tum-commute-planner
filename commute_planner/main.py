@@ -100,9 +100,8 @@ def get_tum_location(location: str):
     return coords["lat"], coords["lon"]
 
 
-def get_routes_for_day(day: date):
+def get_routes_for_events(events_today):
     routes = []
-    events_today = get_events_on_day(day)
     if len(events_today) == 0:
         return []
 
@@ -174,9 +173,15 @@ def event_equals_route(event, route: Route) -> bool:
     return start_time_check and end_time_check and summary_check
 
 
-def refresh_day(day):
+def refresh_day(day, known_events):
     route_calendar_events = get_events_from_calendar(settings.ROUTE_CALENDAR_ID, day)
-    tmp_routes = get_routes_for_day(day)
+    events_today = get_events_on_day(day)
+    print(events_today, known_events)
+    if events_today == known_events:
+        print("No events changed, skipping route recalculation")
+        return events_today
+
+    tmp_routes = get_routes_for_events(events_today)
 
     for event in route_calendar_events:
         for route in tmp_routes:
@@ -192,24 +197,31 @@ def refresh_day(day):
         add_route_to_calendar(route)
         print(f"Created new event {route.calendar_summary}")
 
+    return events_today
 
-def refresh_week(day):
+
+def refresh_week(day, known_events):
+    new_events = {}
     monday = day - timedelta(days=day.weekday())
     for day in range(0, 7):
         current_day = monday + timedelta(days=day)
+        if current_day < datetime.now().date():
+            print(current_day, "is in the past, skipping")
+            continue
         print(f"Refreshing {current_day}")
-        refresh_day(current_day)
+        new_events[day] = refresh_day(current_day, known_events[day])
+
+    return new_events
 
 
 def main():
-    known_events = {}  # {weekday: [event1, event2, ...]}
-    # Checke die Woche über ob sich die events geändert haben, dann refreshe ich das erst
-    # Checke am Tag selbst auch die Routen
-    # Checke 30min bevor Routen angetreten werden 5-minütig
+    known_events = [None, None, None, None, None, None, None]  # [[event1, event2, ...]]
     while True:
         date_today = date.today() + timedelta(days=0)
-        refresh_week(date_today, known_events)
-        time.sleep(60 * 20)
+        known_events = refresh_week(date_today, known_events)
+        time.sleep(60 * 10)
+        print("Finished a week cycle")
+    # TODO: Checke 30min bevor Routen angetreten werden 5-minütig
 
 
 if __name__ == "__main__":
