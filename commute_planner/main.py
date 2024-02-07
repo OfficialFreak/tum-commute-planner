@@ -1,6 +1,7 @@
 from datetime import datetime, date, timedelta
 from typing import Optional
 import requests
+import time
 
 from .calendar_client import CalendarClient
 from .route_api import get_route, Route
@@ -86,9 +87,9 @@ def get_events_from_calendar(calendar_id: str, day: date):
 
 
 def get_tum_location(location: str):
-    API_URL = "https://nav.tum.de"
+    api_url = "https://nav.tum.de"
     response = requests.get(
-        f"{API_URL}/api/get/{location}",
+        f"{api_url}/api/get/{location}",
         headers={
             "User-Agent": settings.USER_AGENT,
             "Accept": "application/json"
@@ -192,12 +193,23 @@ def refresh_day(day):
         print(f"Created new event {route.calendar_summary}")
 
 
+def refresh_week(day):
+    monday = day - timedelta(days=day.weekday())
+    for day in range(0, 7):
+        current_day = monday + timedelta(days=day)
+        print(f"Refreshing {current_day}")
+        refresh_day(current_day)
+
+
 def main():
-    date_today = date.today() + timedelta(days=1)
-    # for route in get_routes_for_day(date_today):
-    #     add_route_to_calendar(route)
-    #     print("Added route to calendar")
-    refresh_day(date_today)
+    known_events = {}  # {weekday: [event1, event2, ...]}
+    # Checke die Woche über ob sich die events geändert haben, dann refreshe ich das erst
+    # Checke am Tag selbst auch die Routen
+    # Checke 30min bevor Routen angetreten werden 5-minütig
+    while True:
+        date_today = date.today() + timedelta(days=0)
+        refresh_week(date_today, known_events)
+        time.sleep(60 * 20)
 
 
 if __name__ == "__main__":

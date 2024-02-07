@@ -18,7 +18,7 @@ MOVEMENT_TYPES = {
     "SBAHN": "🚈",
     "BUS": "🚌",
     "REGIONAL_BUS": "🚏",
-    "PEDESTRIAN": "🚶‍♂️"
+    "PEDESTRIAN": "🚶‍"
 }
 
 
