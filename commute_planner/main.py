@@ -1,7 +1,7 @@
+import asyncio
 from datetime import datetime, date, timedelta
 from typing import Optional
 import requests
-import time
 
 from .calendar_client import CalendarClient
 from .route_api import get_route, Route
@@ -43,10 +43,10 @@ def get_events_on_day(day: date):
     for main_calendar_event in main_calendar_events:
         if "Ausfall" in main_calendar_event.get("summary", ""):
             todays_events = [tum_event for tum_event in todays_events if not (
-                    (main_calendar_event["start"]["dateTime"] == tum_event["start"]["dateTime"]) and
-                    (main_calendar_event["end"]["dateTime"] == tum_event["end"]["dateTime"]) and
-                    ((len(main_calendar_event) < 8) or (
-                            main_calendar_event["summary"][8:] in tum_event.get("summary", "")))
+                (main_calendar_event["start"]["dateTime"] == tum_event["start"]["dateTime"]) and
+                (main_calendar_event["end"]["dateTime"] == tum_event["end"]["dateTime"]) and
+                ((len(main_calendar_event) < 8) or (
+                    main_calendar_event["summary"][8:] in tum_event.get("summary", "")))
             )]
 
     todays_events.extend([main_calendar_event for main_calendar_event in main_calendar_events if
@@ -183,6 +183,12 @@ def refresh_day(day, known_events):
 
     tmp_routes = get_routes_for_events(events_today)
 
+    has_upcoming_route = False
+    for route in tmp_routes:
+        if route.departure - datetime.now() < timedelta(minutes=30):
+            has_upcoming_route = True
+            break
+
     for event in route_calendar_events:
         for route in tmp_routes:
             if event_equals_route(event, route):
@@ -197,16 +203,16 @@ def refresh_day(day, known_events):
         add_route_to_calendar(route)
         print(f"Created new event {route.calendar_summary}")
 
-    return events_today
+    return events_today, has_upcoming_route
 
 
-def refresh_week(day, known_events):
+def refresh_week(day_of_week: date, known_events) -> dict[int, list | None]:
     new_events = {}
-    monday = day - timedelta(days=day.weekday())
+    monday = day_of_week - timedelta(days=day_of_week.weekday())
     for day in range(0, 7):
         current_day = monday + timedelta(days=day)
-        if current_day < datetime.now().date():
-            print(current_day, "is in the past, skipping")
+        if current_day <= date.today():
+            print(current_day, "is in the past or today, skipping")
             continue
         print(f"Refreshing {current_day}")
         new_events[day] = refresh_day(current_day, known_events[day])
@@ -214,15 +220,32 @@ def refresh_week(day, known_events):
     return new_events
 
 
-def main():
-    known_events = [None, None, None, None, None, None, None]  # [[event1, event2, ...]]
-    while True:
+async def update_all_but_today_loop():
+    known_events: dict[int, list | None] = {i: None for i in range(7)}
+
+    while 1:
         date_today = date.today() + timedelta(days=0)
         known_events = refresh_week(date_today, known_events)
-        time.sleep(60 * 10)
+        await asyncio.sleep(10 * 60)
         print("Finished a week cycle")
-    # TODO: Checke 30min bevor Routen angetreten werden 5-minütig
 
+
+async def update_today_loop():
+    known_events: None | list = None
+
+    while 1:
+        known_events, today_has_upcoming_route = refresh_day(date.today(), known_events)
+        if today_has_upcoming_route:
+            await asyncio.sleep(5 * 60)
+        else:
+            await asyncio.sleep(10 * 60)
+
+
+async def main():
+    await asyncio.gather(
+        update_today_loop(),
+        update_all_but_today_loop()
+    )
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
