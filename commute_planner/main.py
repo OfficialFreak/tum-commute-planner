@@ -185,16 +185,12 @@ def refresh_day(day, known_events):
 
     has_upcoming_route = False
     for route in tmp_routes:
-        if route.departure - datetime.now() < timedelta(minutes=30):
+        if route.departure.replace(tzinfo=None) - datetime.now() < timedelta(minutes=30):
             has_upcoming_route = True
             break
 
-    for event in route_calendar_events:
-        for route in tmp_routes:
-            if event_equals_route(event, route):
-                # If they equal, the event doesn't need to be deleted and recreated
-                route_calendar_events.remove(event)
-                tmp_routes.remove(route)
+    route_calendar_events = [event for event in route_calendar_events if not any(event_equals_route(event, route) for route in tmp_routes)]
+    tmp_routes = [route for route in tmp_routes if not any(event_equals_route(event, route) for event in route_calendar_events)]
 
     for event in route_calendar_events:
         CalendarClient().service.events().delete(calendarId=settings.ROUTE_CALENDAR_ID, eventId=event['id']).execute()
