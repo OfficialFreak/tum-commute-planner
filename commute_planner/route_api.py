@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from pytz import utc
 from geopy import distance
 
-from .utils import bold, italic
+from .calendar_client import bold, italic
 
 from . import settings
 
