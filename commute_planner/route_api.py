@@ -62,9 +62,13 @@ class RoutePart:
         return f"{self.departure.strftime('%H:%M')} {bold(str(self.movement_type))} ➜ {self.end.name}"
 
 
+@dataclass
 class Route:
-    def __init__(self, route_data):
-        self.parts = []
+    parts: list
+
+    @classmethod
+    def from_route_data(cls, route_data: dict):
+        self = cls([])
 
         for part in route_data["parts"]:
             self.parts.append(
@@ -89,6 +93,8 @@ class Route:
                     )
                 )
             )
+
+        return self
 
     def __str__(self) -> str:
         return '\n'.join([str(route_part) for route_part in self.parts])
@@ -138,7 +144,7 @@ def get_routes(origin, destination, arrival_time, type_: Literal["ARRIVAL", "DEP
         print(response.status_code, response.headers, response.content)
         raise Exception("Invalid MVG API Response") from ex
 
-    return [Route(route) for route in response_json]
+    return [Route.from_route_data(route) for route in response_json]
 
 
 def get_best_route(routes: list[Route], time: datetime, type_: Literal["ARRIVAL", "DEPARTURE"]) -> Route:
