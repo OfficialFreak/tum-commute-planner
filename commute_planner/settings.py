@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+TUM_API_URL = "https://nav.tum.de"
 USER_AGENT = os.environ.get("USER_AGENT")
 TUM_CALENDAR_ID = os.environ.get("TUM_CALENDAR_ID")
 MAIN_CALENDAR_ID = os.environ.get("MAIN_CALENDAR_ID")

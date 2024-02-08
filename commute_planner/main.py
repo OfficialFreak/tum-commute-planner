@@ -29,43 +29,96 @@ def get_location(event):
     if location_field is None:
         # TODO: Implement Fallback (e.g. to an env variable)
         return None
+
+    # Search for exact ID (TUM Calendar Format)
     if location_field.find("(") != -1:
-        return get_tum_location(location_field.split("(")[-1][:-1])
+        return get_tum_id_location(location_field.split("(")[-1][:-1])
+
+    # Search for exact ID
+    if location_field[:7] == "tum_id:":
+        return get_tum_id_location(location_field[7:])
+
+    # Try to interpret Location using nav.tum.de Search
+    if location_field[:4] == "tum:":
+        return get_tum_location(location_field[4:])
 
     # Try to interpret Location using MVG API
-    response = requests.get("https://www.mvg.de/api/fib/v2/location", params={
-        "query": location_field
-    }, headers={"User-Agent": settings.USER_AGENT})
-
     try:
+        response = requests.get("https://www.mvg.de/api/fib/v2/location", params={
+            "query": location_field
+        }, headers={"User-Agent": settings.USER_AGENT})
+
         response_json = response.json()
     except Exception as ex:
         print(ex)
-        print(response.status_code, response.headers, response.content)
-        raise Exception("Invalid MVG API Response") from ex
+        return None
+
+    if (len(response_json) == 0 or
+            response_json[0].get("latitude", None) is None is response_json[0].get("longitude", None)):
+        return None
 
     return response_json[0]["latitude"], response_json[0]["longitude"]
 
 
+def get_tum_location(query: str):
+    response = requests.get(
+        f"{settings.TUM_API_URL}/api/search",
+        headers={
+            "User-Agent": settings.USER_AGENT,
+            "Accept": "application/json"
+        },
+        params={
+            "q": query,
+            "limit_all": 1,
+            "post_highlight": "",
+            "pre_highlight": ""
+        }
+    )
+    response_json = response.json()
+    tum_id = response_json.get("sections", [{}])[0].get("entries", [{}])[0].get("id", None)
+    if tum_id is None:
+        return None
+    return get_tum_id_location(tum_id)
+
+
+def get_tum_id_location(location_id: str):
+    try:
+        response = requests.get(
+            f"{settings.TUM_API_URL}/api/get/{location_id}",
+            headers={
+                "User-Agent": settings.USER_AGENT,
+                "Accept": "application/json"
+            }
+        )
+        response_json = response.json()
+    except Exception as ex:
+        print(ex)
+        return None
+    coords = response_json.get("coords", None)
+    if coords is None:
+        return None
+    return coords["lat"], coords["lon"]
+
+
 def get_events_on_day(day: date):
-    todays_events = get_events_from_calendar(settings.TUM_CALENDAR_ID, day)
+    events_today = get_events_from_calendar(settings.TUM_CALENDAR_ID, day)
     main_calendar_events = get_events_from_calendar(settings.MAIN_CALENDAR_ID, day)
 
     for main_calendar_event in main_calendar_events:
         if "Ausfall" in main_calendar_event.get("summary", ""):
-            todays_events = [tum_event for tum_event in todays_events if not (
-                (main_calendar_event["start"]["dateTime"] == tum_event["start"]["dateTime"]) and
-                (main_calendar_event["end"]["dateTime"] == tum_event["end"]["dateTime"]) and
-                ((len(main_calendar_event) < 8) or (
-                    main_calendar_event["summary"][8:] in tum_event.get("summary", "")))
+            events_today = [tum_event for tum_event in events_today if not (
+                    (main_calendar_event["start"]["dateTime"] == tum_event["start"]["dateTime"]) and
+                    (main_calendar_event["end"]["dateTime"] == tum_event["end"]["dateTime"]) and
+                    ((len(main_calendar_event) < 8) or (
+                            main_calendar_event["summary"][8:] in tum_event.get("summary", "")))
             )]
 
-    todays_events.extend([main_calendar_event for main_calendar_event in main_calendar_events if
-                          not ("Ausfall" in main_calendar_event.get("summary", ""))])
+    events_today.extend([main_calendar_event for main_calendar_event in main_calendar_events if
+                         not ("Ausfall" in main_calendar_event.get("summary", ""))])
 
-    todays_events.sort(key=lambda x: datetime.fromisoformat(x["start"]["dateTime"]))
+    events_today.sort(key=lambda x: datetime.fromisoformat(x["start"]["dateTime"]))
 
-    return todays_events
+    return events_today
 
 
 def get_events_from_calendar(calendar_id: str, day: date):
@@ -97,20 +150,6 @@ def get_events_from_calendar(calendar_id: str, day: date):
     return events
 
 
-def get_tum_location(location: str):
-    api_url = "https://nav.tum.de"
-    response = requests.get(
-        f"{api_url}/api/get/{location}",
-        headers={
-            "User-Agent": settings.USER_AGENT,
-            "Accept": "application/json"
-        }
-    )
-    response_json = response.json()
-    coords = response_json.get("coords", None)
-    return coords["lat"], coords["lon"]
-
-
 def get_routes_for_events(events_today):
     routes = []
     if len(events_today) == 0:
@@ -121,17 +160,19 @@ def get_routes_for_events(events_today):
     arrival_time = datetime.fromisoformat(events_today[0]["start"]["dateTime"]).replace(tzinfo=None) - timedelta(
         minutes=settings.TIME_MARGIN_BEFORE)
     location_data = get_location(events_today[0])
-    route = get_route(settings.HOME_POS, location_data, arrival_time)
-    if route is not None:
-        routes.append(route)
+    if location_data is not None:
+        route = get_route(settings.HOME_POS, location_data, arrival_time)
+        if route is not None:
+            routes.append(route)
 
     # From last event to home
     departure_time = datetime.fromisoformat(events_today[-1]["end"]["dateTime"]).replace(tzinfo=None) + timedelta(
         minutes=settings.TIME_MARGIN_AFTER)
     location_data = get_location(events_today[-1])
-    route = get_route(location_data, settings.HOME_POS, departure_time, type_="DEPARTURE")
-    if route is not None:
-        routes.append(route)
+    if location_data is not None:
+        route = get_route(location_data, settings.HOME_POS, departure_time, type_="DEPARTURE")
+        if route is not None:
+            routes.append(route)
 
     # Routes between events
     if len(events_today) == 1:
@@ -148,6 +189,11 @@ def get_routes_for_events(events_today):
 def route_between_events(event1, event2) -> Optional[Route]:
     event1_location = get_location(event1)
     event2_location = get_location(event2)
+    if event1_location is None:
+        return None
+    if event2_location is None:
+        return None
+
     departure_time = datetime.fromisoformat(event1["end"]["dateTime"]).replace(tzinfo=None) + timedelta(
         minutes=settings.TIME_MARGIN_AFTER)
     return get_route(event1_location, event2_location, departure_time, type_="DEPARTURE")
@@ -192,15 +238,18 @@ def refresh_day(day, known_events):
 
     has_upcoming_route = False
     for route in target_routes:
-        if route.departure.replace(tzinfo=None) > datetime.now() and route.departure.replace(tzinfo=None) - datetime.now() < timedelta(minutes=30):
+        if route.departure.replace(tzinfo=None) > datetime.now() and route.departure.replace(
+                tzinfo=None) - datetime.now() < timedelta(minutes=30):
             has_upcoming_route = True
             break
 
     if events_today == known_events:
         return events_today, has_upcoming_route
 
-    events_to_remove = [event for event in existing_events if not any(event_equals_route(event, route) for route in target_routes)]
-    routes_to_add = [route for route in target_routes if not any(event_equals_route(event, route) for event in existing_events)]
+    events_to_remove = [event for event in existing_events if
+                        not any(event_equals_route(event, route) for route in target_routes)]
+    routes_to_add = [route for route in target_routes if
+                     not any(event_equals_route(event, route) for event in existing_events)]
 
     for event in events_to_remove:
         CalendarClient().service.events().delete(calendarId=settings.ROUTE_CALENDAR_ID, eventId=event['id']).execute()
@@ -231,7 +280,7 @@ async def update_all_but_today_loop():
     known_events_monday = date.today() - timedelta(days=date.today().weekday())
 
     while 1:
-        print(f"[{known_events_monday}] {TerminalStyles.UNDERLINE}Starting Update All Loop {known_events_monday}{TerminalStyles.ENDC}")
+        print(f"[{known_events_monday}] {TerminalStyles.UNDERLINE}Starting Update All Loop{TerminalStyles.ENDC}")
         if date.today() - timedelta(days=date.today().weekday()) != known_events_monday:
             known_events = {i: None for i in range(7)}
             known_events_monday = date.today() - timedelta(days=date.today().weekday())
@@ -255,7 +304,8 @@ async def update_today_loop():
         known_events, today_has_upcoming_route = refresh_day(date.today(), known_events)
         print(f"[{known_events_day}] {TerminalStyles.OKGREEN}Finished Update Today Loop{TerminalStyles.ENDC}")
         if today_has_upcoming_route:
-            print(f"[{known_events_day}] {TerminalStyles.WARNING}Has upcoming route, 1min waiting times...{TerminalStyles.ENDC}")
+            print(
+                f"[{known_events_day}] {TerminalStyles.WARNING}Has upcoming route, 1min waiting times...{TerminalStyles.ENDC}")
             await asyncio.sleep(1 * 60)
         else:
             print(f"[{known_events_day}] No upcoming route, 5min waiting time")
@@ -267,6 +317,7 @@ async def main():
         update_today_loop(),
         update_all_but_today_loop()
     )
+
 
 if __name__ == "__main__":
     asyncio.run(main())
