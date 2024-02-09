@@ -1,3 +1,4 @@
+import asyncio
 from typing import Optional, Literal
 from datetime import datetime, timedelta
 import requests
@@ -142,7 +143,9 @@ def get_routes(origin, destination, arrival_time, type_: Literal["ARRIVAL", "DEP
     except Exception as ex:
         print(ex)
         print(response.status_code, response.headers, response.content)
-        raise Exception("Invalid MVG API Response") from ex
+        asyncio.sleep(10)
+        return get_routes(origin, destination, arrival_time, type_)
+        # raise Exception("Invalid MVG API Response") from ex
 
     return [Route.from_route_data(route) for route in response_json]
 
