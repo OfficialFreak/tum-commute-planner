@@ -1,5 +1,10 @@
 # TUM Commute Planner
 Creates Google Calendar Events with a recommended route from your home to University.
+<div style="display: flex; flex-direction: row; justify-content: between;">
+   <img src="https://github.com/OfficialFreak/tum-commute-planner/assets/36410565/df6a7e26-2d68-4e02-8aea-d09c1a02694c" alt="Preview of events in Google Calendar" style="height: 20rem;" />
+   <img src="https://github.com/OfficialFreak/tum-commute-planner/assets/36410565/883ae5f5-e93c-45af-8b82-2832f6a569e8" alt="Preview of route description" style="height: 20rem;" />
+</div>
+
 
 ## Getting started
 1. ⬇ Install the requirements `pip3 install -r requirements.txt`
