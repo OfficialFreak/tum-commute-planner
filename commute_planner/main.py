@@ -258,25 +258,26 @@ def event_equals_route(event, route: Route) -> bool:
 
 
 def refresh_day(day, known_events):
-    existing_events = get_events_from_calendar(settings.ROUTE_CALENDAR_ID, day)
+    current_routes = get_events_from_calendar(settings.ROUTE_CALENDAR_ID, day)
     events_today = get_events_on_day(day)
 
-    target_routes = get_routes_for_events(events_today)
-
     has_upcoming_route = False
-    for route in target_routes:
-        if route.departure.replace(tzinfo=None) > datetime.now() and route.departure.replace(
-                tzinfo=None) - datetime.now() < timedelta(minutes=30):
+    for route in current_routes:
+        if (datetime.fromisoformat(route["start"]["dateTime"]).replace(tzinfo=None) > datetime.now() and
+                datetime.fromisoformat(route["start"]["dateTime"]).replace(tzinfo=None) - datetime.now() < timedelta(
+                    minutes=30)):
             has_upcoming_route = True
             break
 
-    if events_today == known_events:
-        return events_today, has_upcoming_route
+    if events_today == known_events and not has_upcoming_route:
+        return events_today, False
 
-    events_to_remove = [event for event in existing_events if
+    target_routes = get_routes_for_events(events_today)
+
+    events_to_remove = [event for event in current_routes if
                         not any(event_equals_route(event, route) for route in target_routes)]
     routes_to_add = [route for route in target_routes if
-                     not any(event_equals_route(event, route) for event in existing_events)]
+                     not any(event_equals_route(event, route) for event in current_routes)]
 
     for event in events_to_remove:
         CalendarClient().service.events().delete(calendarId=settings.ROUTE_CALENDAR_ID, eventId=event['id']).execute()
