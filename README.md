@@ -1,6 +1,6 @@
 # TUM Commute Planner
 Creates Google Calendar Events with a recommended route from your home to University.
-<div style="display: flex; flex-direction: row; justify-content: between;">
+<div style="display: flex; flex-direction: row;">
    <img src="https://github.com/OfficialFreak/tum-commute-planner/assets/36410565/df6a7e26-2d68-4e02-8aea-d09c1a02694c" alt="Preview of events in Google Calendar" style="height: 20rem;" />
    <img src="https://github.com/OfficialFreak/tum-commute-planner/assets/36410565/883ae5f5-e93c-45af-8b82-2832f6a569e8" alt="Preview of route description" style="height: 20rem;" />
 </div>
@@ -33,3 +33,12 @@ Creates Google Calendar Events with a recommended route from your home to Univer
 * You can also mark TUM Events as "cancelled" by creating an event in your main calendar at exactly the same start- and ending-time with the title "Ausfall". You can further specify which event you want cancelled by adding a space and a string that's unique to the title of that event (e.g. "Ausfall Diskrete Strukturen")
 * By default, routes between events are planned directly after the first of the two events is finished. To change this behaviour, add `route_arrive` to the metadata of the second event
 * To override the default Before- and After-Margin for an event, simply add `margin_before=<new_margin>` and `margin_after=<new_margin>` (e.g. `margin_before=0` or `margin_before=5.5`) to the event's metadata
+
+## Contributing
+Issues and Pull-Requests are very welcome. I will also continue to work on this project.
+
+Planned features include:
+* Correctly parsing Exams / Add option to specify correct location (as currently there's an event for every exam location)
+* Some sort of integration of the Mensa (e.g. by using the [eat-api](https://eat-api.tum.sexy)) to:
+  * calculate a route to the nearest Mensa at the "optimal time" (figuring out an optimal time is the reason why this is not implemented at the moment) and 
+  * display its menu inside the calendar
