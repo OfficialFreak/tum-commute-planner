@@ -151,7 +151,7 @@ def get_events_from_calendar(calendar_id: str, day: date):
 
 
 def get_metadata(event):
-    split_flags = event.get("description", "").split("\n")
+    split_flags = event.get("description", "").split("\n")[0].split(", ")
     metadata = {}
     for data in split_flags:
         res = data.split("=")
@@ -210,7 +210,16 @@ def route_between_events(event1, event2) -> Optional[Route]:
     if event2_location is None:
         return None
 
+    event2_metadata = get_metadata(event2)
+    if event2_metadata.get("route_arrive", False):
+        margin_before = float(event2_metadata.get("margin_before", settings.TIME_MARGIN_BEFORE))
+        arrival_time = datetime.fromisoformat(event2["start"]["dateTime"]).replace(tzinfo=None) - timedelta(
+            minutes=margin_before)
+
+        return get_route(event1_location, event2_location, arrival_time, type_="ARRIVAL")
+
     event1_metadata = get_metadata(event1)
+
     margin_after = float(event1_metadata.get("margin_after", settings.TIME_MARGIN_AFTER))
     departure_time = datetime.fromisoformat(event1["end"]["dateTime"]).replace(tzinfo=None) + timedelta(
         minutes=margin_after)
@@ -313,17 +322,19 @@ async def update_following_weeks():
     known_events_monday = date.today() - timedelta(days=date.today().weekday() - 7)
 
     while 1:
-        print(f"[{known_events_monday}] {TerminalStyles.UNDERLINE}Starting Update Following Weeks Loop{TerminalStyles.ENDC}")
+        print(
+            f"[{known_events_monday}] {TerminalStyles.UNDERLINE}Starting Update Following Weeks Loop{TerminalStyles.ENDC}")
         if date.today() - timedelta(days=date.today().weekday() - 7) != known_events_monday:
             known_events = {i: None for i in range(7 * settings.PRE_CALC_WEEK_COUNT)}
             known_events_monday = date.today() - timedelta(days=date.today().weekday() - 7)
 
         new_known_events = {}
-        for week in range(1, settings.PRE_CALC_WEEK_COUNT+1):
+        for week in range(1, settings.PRE_CALC_WEEK_COUNT + 1):
             date_today = date.today() + timedelta(days=7 * week)
             known_events = refresh_week(date_today, known_events)
         known_events = new_known_events
-        print(f"[{known_events_monday}] {TerminalStyles.OKGREEN}Finished Update Following Weeks Loop{TerminalStyles.ENDC}")
+        print(
+            f"[{known_events_monday}] {TerminalStyles.OKGREEN}Finished Update Following Weeks Loop{TerminalStyles.ENDC}")
         await asyncio.sleep(30 * 60)
 
 
