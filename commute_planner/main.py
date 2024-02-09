@@ -150,15 +150,29 @@ def get_events_from_calendar(calendar_id: str, day: date):
     return events
 
 
+def get_metadata(event):
+    split_flags = event.get("description", "").split("\n")
+    metadata = {}
+    for data in split_flags:
+        res = data.split("=")
+        key = res[0]
+        value = True
+        if len(res) > 1:
+            value = res[1]
+        metadata[key] = value
+    return metadata
+
+
 def get_routes_for_events(events_today):
     routes = []
     if len(events_today) == 0:
         return []
 
     # From home to first event
-    # event_metadata = events_today[0][""]
+    event_metadata = get_metadata(events_today[0])
+    margin_before = float(event_metadata.get("margin_before", settings.TIME_MARGIN_BEFORE))
     arrival_time = datetime.fromisoformat(events_today[0]["start"]["dateTime"]).replace(tzinfo=None) - timedelta(
-        minutes=settings.TIME_MARGIN_BEFORE)
+        minutes=margin_before)
     location_data = get_location(events_today[0])
     if location_data is not None:
         route = get_route(settings.HOME_POS, location_data, arrival_time)
@@ -166,8 +180,10 @@ def get_routes_for_events(events_today):
             routes.append(route)
 
     # From last event to home
+    event_metadata = get_metadata(events_today[-1])
+    margin_after = float(event_metadata.get("margin_after", settings.TIME_MARGIN_AFTER))
     departure_time = datetime.fromisoformat(events_today[-1]["end"]["dateTime"]).replace(tzinfo=None) + timedelta(
-        minutes=settings.TIME_MARGIN_AFTER)
+        minutes=margin_after)
     location_data = get_location(events_today[-1])
     if location_data is not None:
         route = get_route(location_data, settings.HOME_POS, departure_time, type_="DEPARTURE")
@@ -194,8 +210,10 @@ def route_between_events(event1, event2) -> Optional[Route]:
     if event2_location is None:
         return None
 
+    event1_metadata = get_metadata(event1)
+    margin_after = float(event1_metadata.get("margin_after", settings.TIME_MARGIN_AFTER))
     departure_time = datetime.fromisoformat(event1["end"]["dateTime"]).replace(tzinfo=None) + timedelta(
-        minutes=settings.TIME_MARGIN_AFTER)
+        minutes=margin_after)
     return get_route(event1_location, event2_location, departure_time, type_="DEPARTURE")
 
 
@@ -275,7 +293,7 @@ def refresh_week(day_of_week: date, known_events) -> dict[int, list | None]:
     return new_events
 
 
-async def update_all_but_today_loop():
+async def update_week_except_today_loop():
     known_events: dict[int, list | None] = {i: None for i in range(7)}
     known_events_monday = date.today() - timedelta(days=date.today().weekday())
 
@@ -285,10 +303,28 @@ async def update_all_but_today_loop():
             known_events = {i: None for i in range(7)}
             known_events_monday = date.today() - timedelta(days=date.today().weekday())
 
-        date_today = date.today() + timedelta(days=0)
-        known_events = refresh_week(date_today, known_events)
+        known_events = refresh_week(date.today(), known_events)
         print(f"[{known_events_monday}] {TerminalStyles.OKGREEN}Finished Update All Loop{TerminalStyles.ENDC}")
         await asyncio.sleep(10 * 60)
+
+
+async def update_following_weeks():
+    known_events: dict[int, list | None] = {i: None for i in range(7 * settings.PRE_CALC_WEEK_COUNT)}
+    known_events_monday = date.today() - timedelta(days=date.today().weekday() - 7)
+
+    while 1:
+        print(f"[{known_events_monday}] {TerminalStyles.UNDERLINE}Starting Update Following Weeks Loop{TerminalStyles.ENDC}")
+        if date.today() - timedelta(days=date.today().weekday() - 7) != known_events_monday:
+            known_events = {i: None for i in range(7 * settings.PRE_CALC_WEEK_COUNT)}
+            known_events_monday = date.today() - timedelta(days=date.today().weekday() - 7)
+
+        new_known_events = {}
+        for week in range(1, settings.PRE_CALC_WEEK_COUNT+1):
+            date_today = date.today() + timedelta(days=7 * week)
+            known_events = refresh_week(date_today, known_events)
+        known_events = new_known_events
+        print(f"[{known_events_monday}] {TerminalStyles.OKGREEN}Finished Update Following Weeks Loop{TerminalStyles.ENDC}")
+        await asyncio.sleep(30 * 60)
 
 
 async def update_today_loop():
@@ -315,7 +351,8 @@ async def update_today_loop():
 async def main():
     await asyncio.gather(
         update_today_loop(),
-        update_all_but_today_loop()
+        update_week_except_today_loop(),
+        update_following_weeks()
     )
 
 
