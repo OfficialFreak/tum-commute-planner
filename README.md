@@ -28,14 +28,14 @@ Creates Google Calendar Events with a recommended route from your home to Univer
 ### Event Metadata
 * Tags, from now on referred to as metadata must be put at the top of the description, separated by a comma and a space: ", "
 * `route_relevant`: opt in a Main-Calendar event for route-planning (Location required)
-* `home_override`: set a new home for the day (Location required)
-* `disable_home`: disable the routes from / to home for the day
 * Marking TUM Events as "cancelled": Creating an event in your main calendar at exactly the same start- and ending-time with the title `Ausfall`
   * You can further specify which event you want cancelled by adding a space and a string that's unique to the title of that event (e.g. "Ausfall Diskrete Strukturen")
 * `route_arrive`: Plan the route to arrive at the beginning of this event (By default, routes between events are planned directly after the first of the two events is finished)
 * `margin_before=<new_margin>`, `margin_after=<new_margin>`: override the default Before- and After-Margin for an event (e.g. `margin_before=0` or `margin_before=5.5`)
 * `db_routing`: use the DB Routing API instead of MVG Routing for all routes regarding an event 
   * this can be combined with `latlon:` in the location as the MVG API doesn't know about stations outside of Munich
+* `home_override`: set a new home for the day (Location required)
+* `disable_home`: disable the routes from / to home for the day
 
 ### Location Field
 * The route planner can accept several forms of Locations:
