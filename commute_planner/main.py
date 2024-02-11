@@ -326,7 +326,6 @@ def refresh_week(day_of_week: date, known_events, known_home_overrides):
         new_events[day], _, new_known_home_overrides[day] = refresh_day(
             current_day, known_events[day], known_home_overrides[day])
 
-    print(new_events, new_known_home_overrides)
     return new_events, new_known_home_overrides
 
 
