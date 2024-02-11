@@ -26,7 +26,7 @@ Creates Google Calendar Events with a recommended route from your home to Univer
   * The current week's events are checked every 10 minutes
   * The following weeks' events are checked every 30 minutes
 ### Event Metadata
-* Tags, from now on referred to as metadata must be put at the top of the description, separated by a comma and a space: ", "
+* Metadata must be put at the top of the description, each separated by a comma and a space: ", "
 * `route_relevant`: opt in a Main-Calendar event for route-planning (Location required)
 * Marking TUM Events as "cancelled": Creating an event in your main calendar at exactly the same start- and ending-time with the title `Ausfall`
   * You can further specify which event you want cancelled by adding a space and a string that's unique to the title of that event (e.g. "Ausfall Diskrete Strukturen")
