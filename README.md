@@ -46,4 +46,3 @@ Planned features include:
 * Some sort of integration of the Mensa (e.g. by using the [eat-api](https://eat-api.tum.sexy)) to:
   * calculate a route to the nearest Mensa at the "optimal time" (figuring out an optimal time is the reason why this is not implemented at the moment) and 
   * display its menu inside the calendar
-* Disabling routes for way from / to home / Add Override for Home on certain days
