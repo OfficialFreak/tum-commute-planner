@@ -35,12 +35,15 @@ def get_location(event):
         return get_tum_id_location(location_field.split("(")[-1][:-1])
 
     # Search for exact ID
-    if location_field[:7] == "tum_id:":
+    if location_field.startswith("tum:"):
         return get_tum_id_location(location_field[7:])
 
     # Try to interpret Location using nav.tum.de Search
-    if location_field[:4] == "tum:":
+    if location_field.startswith("tum:"):
         return get_tum_location(location_field[4:])
+
+    if location_field.startswith("latlon:"):
+        return [float(elem) for elem in location_field[7:].split(", ")]
 
     # Try to interpret Location using MVG API
     try:
@@ -175,7 +178,8 @@ def get_routes_for_events(events_today):
         minutes=margin_before)
     location_data = get_location(events_today[0])
     if location_data is not None:
-        route = get_route(settings.HOME_POS, location_data, arrival_time)
+        route = get_route(settings.HOME_POS, location_data, arrival_time,
+                          api_="DB" if event_metadata.get("db_routing", False) else "MVG")
         if route is not None:
             routes.append(route)
 
@@ -186,7 +190,8 @@ def get_routes_for_events(events_today):
         minutes=margin_after)
     location_data = get_location(events_today[-1])
     if location_data is not None:
-        route = get_route(location_data, settings.HOME_POS, departure_time, type_="DEPARTURE")
+        route = get_route(location_data, settings.HOME_POS, departure_time, type_="DEPARTURE",
+                          api_="DB" if event_metadata.get("db_routing", False) else "MVG")
         if route is not None:
             routes.append(route)
 
@@ -210,20 +215,23 @@ def route_between_events(event1, event2) -> Optional[Route]:
     if event2_location is None:
         return None
 
+    event1_metadata = get_metadata(event1)
     event2_metadata = get_metadata(event2)
     if event2_metadata.get("route_arrive", False):
         margin_before = float(event2_metadata.get("margin_before", settings.TIME_MARGIN_BEFORE))
         arrival_time = datetime.fromisoformat(event2["start"]["dateTime"]).replace(tzinfo=None) - timedelta(
             minutes=margin_before)
 
-        return get_route(event1_location, event2_location, arrival_time, type_="ARRIVAL")
-
-    event1_metadata = get_metadata(event1)
+        return get_route(event1_location, event2_location, arrival_time, type_="ARRIVAL",
+                         api_="DB" if event1_metadata.get("db_routing", False) or
+                                      event2_metadata.get("db_routing", False) else "MVG")
 
     margin_after = float(event1_metadata.get("margin_after", settings.TIME_MARGIN_AFTER))
     departure_time = datetime.fromisoformat(event1["end"]["dateTime"]).replace(tzinfo=None) + timedelta(
         minutes=margin_after)
-    return get_route(event1_location, event2_location, departure_time, type_="DEPARTURE")
+    return get_route(event1_location, event2_location, departure_time, type_="DEPARTURE",
+                     api_="DB" if event1_metadata.get("db_routing", False) or
+                                  event2_metadata.get("db_routing", False) else "MVG")
 
 
 def add_route_to_calendar(route: Route):

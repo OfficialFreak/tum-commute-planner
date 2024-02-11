@@ -3,6 +3,7 @@ from typing import Optional, Literal
 from datetime import datetime, timedelta
 import requests
 from dataclasses import dataclass
+
 from pytz import utc
 from geopy import distance
 
@@ -11,15 +12,20 @@ from .calendar_client import bold, italic
 from . import settings
 
 MOVEMENT_TYPES = {
-    "SCHIFF": "🛥️",
+    "PEDESTRIAN": "🚶‍",
     "RUFTAXI": "🚕",
+    "BUS": "🚌",
+    "REGIONAL_BUS": "🚏",
     "BAHN": "🚝",
     "UBAHN": "🚇",
     "TRAM": "🚋",
     "SBAHN": "🚈",
-    "BUS": "🚌",
-    "REGIONAL_BUS": "🚏",
-    "PEDESTRIAN": "🚶‍"
+    "ICE": "🚆",
+    "EC_IC": "🚅",
+    "IR": "🚅",
+    "REGIONAL": "🚈",
+    "SCHIFF": "🛥️",
+    "UNKNOWN": "🐎"
 }
 
 
@@ -29,8 +35,31 @@ class Location:
     place: str
     coordinates: tuple
 
+    @classmethod
+    def coords_from_part(cls, part, type_: Literal["FROM", "TO"]):
+        index = 0 if type_ == "FROM" else -1
+
+        stations = part["halte"]
+        if len(stations) == 0:
+            return None
+        return Location.coords_from_db_id(stations[index]["id"])
+
+    @classmethod
+    def coords_from_db_id(cls, db_id):
+        if db_id is None:
+            return None
+        split_id = db_id.split("@")
+        lat = -1
+        lon = -1
+        for elem in split_id:
+            if elem[:1] == "Y":
+                lat = elem[2:]
+            elif elem[:1] == "X":
+                lon = elem[2:]
+        return int(lat) / 1e6, int(lon) / 1e6
+
     def __str__(self) -> str:
-        return f"{self.name}, {self.place}"
+        return str(self.name) + f", {self.place}" if self.place else ""
 
 
 @dataclass
@@ -68,7 +97,7 @@ class Route:
     parts: list
 
     @classmethod
-    def from_route_data(cls, route_data: dict):
+    def from_mvg_data(cls, route_data: dict):
         self = cls([])
 
         for part in route_data["parts"]:
@@ -91,6 +120,38 @@ class Route:
                         part["line"]["transportType"],
                         part["line"]["label"],
                         part["line"]["destination"]
+                    )
+                )
+            )
+
+        return self
+
+    @classmethod
+    def from_db_data(cls, route_data: dict):
+        self = cls([])
+
+        for part in route_data["verbindungsAbschnitte"]:
+            self.parts.append(
+                RoutePart(
+                    datetime.fromisoformat(part.get("ezAbfahrtsZeitpunkt", part["abfahrtsZeitpunkt"])).replace(
+                        tzinfo=utc),
+                    datetime.fromisoformat(part.get("ezAnkunftsZeitpunkt", part["ankunftsZeitpunkt"])).replace(
+                        tzinfo=utc),
+                    Location(
+                        part["abfahrtsOrt"],
+                        "",
+                        Location.coords_from_part(part, type_="FROM")
+                    ),
+                    Location(
+                        part["ankunftsOrt"],
+                        "",
+                        Location.coords_from_part(part, type_="TO")
+                    ),
+                    MovementType(
+                        "PEDESTRIAN" if part["verkehrsmittel"].get("typ", "") == "WALK"
+                        else part["verkehrsmittel"].get("produktGattung", "UNKNOWN"),
+                        part["verkehrsmittel"].get("langText", part["verkehrsmittel"]["name"]),
+                        part["verkehrsmittel"].get("richtung", "")
                     )
                 )
             )
@@ -128,7 +189,61 @@ class Route:
         return self.arrival - self.departure
 
 
-def get_routes(origin, destination, arrival_time, type_: Literal["ARRIVAL", "DEPARTURE"]):
+def get_route_from_db(origin, destination, arrival_time, type_: Literal["ARRIVAL", "DEPARTURE"]):
+    response = requests.post("https://www.bahn.de/web/api/angebote/fahrplan", json={
+        "abfahrtsHalt": f"@X={
+            str(origin[1]).replace('.', '')[:8].ljust(8, '0')
+        }@Y={
+            str(origin[0]).replace('.', '')[:8].ljust(8, '0')
+        }",
+        "anfrageZeitpunkt": arrival_time.isoformat(),
+        "ankunftsHalt": f"@X={str(destination[1]).replace('.', '')[:8].ljust(8, '0')}@Y={str(destination[0]).replace('.', '')[:8].ljust(8, '0')}",
+        "ankunftSuche": "ABFAHRT" if type_ == "DEPARTURE" else "ANKUNFT",
+        "klasse": "KLASSE_2",
+        "produktgattungen": [
+            "ICE",
+            "EC_IC",
+            "IR",
+            "REGIONAL",
+            "SBAHN",
+            "BUS",
+            "SCHIFF",
+            "UBAHN",
+            "TRAM",
+            "ANRUFPFLICHTIG"
+        ],
+        "reisende": [
+            {
+                "typ": "ERWACHSENER",
+                "ermaessigungen": [
+                    {
+                        "art": "KEINE_ERMAESSIGUNG",
+                        "klasse": "KLASSENLOS"
+                    }
+                ],
+                "alter": [],
+                "anzahl": 1
+            }
+        ],
+        "rueckfahrtAnfrageFolgt": False,
+        "schnelleVerbindungen": True,
+        "sitzplatzOnly": False,
+        "bikeCarriage": False,
+        "reservierungsKontingenteVorhanden": False
+    }, headers={"User-Agent": settings.USER_AGENT})
+    try:
+        response_json = response.json()
+    except Exception as ex:
+        print(ex)
+        print(response.status_code, response.headers, response.content)
+        asyncio.sleep(10)
+        return get_route_from_db(origin, destination, arrival_time, type_)
+        # raise Exception("Invalid DB API Response") from ex
+
+    return [Route.from_db_data(route) for route in response_json.get("verbindungen", [])]
+
+
+def get_route_from_mvg(origin, destination, arrival_time, type_: Literal["ARRIVAL", "DEPARTURE"]):
     response = requests.get("https://www.mvg.de/api/fib/v2/connection", params={
         "originLatitude": origin[0],
         "originLongitude": origin[1],
@@ -144,27 +259,38 @@ def get_routes(origin, destination, arrival_time, type_: Literal["ARRIVAL", "DEP
         print(ex)
         print(response.status_code, response.headers, response.content)
         asyncio.sleep(10)
-        return get_routes(origin, destination, arrival_time, type_)
+        return get_route_from_mvg(origin, destination, arrival_time, type_)
         # raise Exception("Invalid MVG API Response") from ex
 
-    return [Route.from_route_data(route) for route in response_json]
+    return [Route.from_mvg_data(route) for route in response_json]
+
+
+def get_routes(origin, destination, arrival_time, type_: Literal["ARRIVAL", "DEPARTURE"], api_: Literal["MVG", "DB"]):
+    if api_ == "DB":
+        return get_route_from_db(origin, destination, arrival_time, type_)
+    elif api_ == "MVG":
+        return get_route_from_mvg(origin, destination, arrival_time, type_)
+
+    return []
 
 
 def get_best_route(routes: list[Route], time: datetime, type_: Literal["ARRIVAL", "DEPARTURE"]) -> Route:
     if type_ == "ARRIVAL":
         filtered_routes = filter(lambda route: route.arrival <= time.replace(tzinfo=utc), routes)
-        return max(filtered_routes, key=lambda route: route.departure)
+        return max(filtered_routes, key=lambda route: route.departure, default=None)
 
     filtered_routes = filter(lambda route: route.departure >= time.replace(tzinfo=utc), routes)
-    return min(filtered_routes, key=lambda route: route.arrival)
+    return min(filtered_routes, key=lambda route: route.arrival, default=None)
 
 
-def get_route(origin, destination, time, type_: Literal["ARRIVAL", "DEPARTURE"] = "ARRIVAL") -> Optional[Route]:
+def get_route(origin, destination, time, type_: Literal["ARRIVAL", "DEPARTURE"] = "ARRIVAL",
+              api_: Literal["MVG", "DB"] = "mvg") -> Optional[Route]:
     if distance.distance(origin, destination).kilometers <= settings.MIN_ROUTE_DISTANCE:
         return None
-    best_route = get_best_route(get_routes(origin, destination, time, type_), time, type_)
+    best_route = get_best_route(get_routes(origin, destination, time, type_, api_), time, type_)
     if best_route is None:  # If no route could be found, check 30 min earlier/later
+        print("No route could be found, checking 30mins offset")
         if type_ == "ARRIVAL":
-            return get_route(origin, destination, time - timedelta(minutes=30), type_)
-        return get_route(origin, destination, time + timedelta(minutes=30), type_)
+            return get_route(origin, destination, time - timedelta(minutes=30), type_, api_)
+        return get_route(origin, destination, time + timedelta(minutes=30), type_, api_)
     return best_route

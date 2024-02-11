@@ -29,17 +29,19 @@ Creates Google Calendar Events with a recommended route from your home to Univer
 * You can opt in a Main-Calendar event for route-planning by adding `route_relevant` to the metadata and adding a location in the location field
   * to mark the location as a TUM Location, prefix it with `tum:`
   * to mark the location as a TUM Location / Room ID, prefix it with `tum_id:`
+  * to mark the location as raw latitude and longitude (in the form of lat, lon), prefix it with `latlon:`
   * if the location isn't prefixed, it's evaluated by the MVG API
 * You can also mark TUM Events as "cancelled" by creating an event in your main calendar at exactly the same start- and ending-time with the title "Ausfall". You can further specify which event you want cancelled by adding a space and a string that's unique to the title of that event (e.g. "Ausfall Diskrete Strukturen")
 * By default, routes between events are planned directly after the first of the two events is finished. To change this behaviour, add `route_arrive` to the metadata of the second event
 * To override the default Before- and After-Margin for an event, simply add `margin_before=<new_margin>` and `margin_after=<new_margin>` (e.g. `margin_before=0` or `margin_before=5.5`) to the event's metadata
+* To use the DB Routing API instead of MVG Routing for an event, add `db_routing` to the metadata (this can be combined with `latlon:` in the location as the MVG API doesn't know about stations outside of Munich)
 
 ## Contributing
 Issues and Pull-Requests are very welcome. I will also continue to work on this project.
 
 Planned features include:
 * Correctly parsing Exams / Add option to specify correct location (as currently there's an event for every exam location)
-* Integrating the Google Maps API for Routes outside the MVG APIs Area 
 * Some sort of integration of the Mensa (e.g. by using the [eat-api](https://eat-api.tum.sexy)) to:
   * calculate a route to the nearest Mensa at the "optimal time" (figuring out an optimal time is the reason why this is not implemented at the moment) and 
   * display its menu inside the calendar
+* Disabling routes for way from / to home / Add Override for Home on certain days
