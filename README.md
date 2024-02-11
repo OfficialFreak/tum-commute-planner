@@ -22,15 +22,17 @@ Creates Google Calendar Events with a recommended route from your home to Univer
 ## Usage
 * metadata must be put at the top of the description, separated by a comma and a space: ", "
 * When setup correctly, the script will continuously update the routes in your calendar
-  * The current day's events in the calendar will be checked every 5 minutes (and will only recalculate the route if the events changed)
-    * If there's a route within 30 minutes of the current time, the script will update the route with data from MVG every minute, even if the event's haven't changed
-  * The current week's events in the calendar will be checked every 10 minutes (and will only recalculate the route if the events changed)
-  * The following weeks' events will be checked every 30 minutes for changes (and will only recalculate the route if the events changed)
+  * The current day's events are checked every 5mins (and will only recalculate the route if the events changed)
+    * If there's a route within 30 minutes, the script will renew the Route using a Routing API every minute, even if the event's haven't changed
+  * The current week's events are checked every 10 minutes
+  * The following weeks' events are checked every 30 minutes
 * You can opt in a Main-Calendar event for route-planning by adding `route_relevant` to the metadata and adding a location in the location field
   * to mark the location as a TUM Location, prefix it with `tum:`
   * to mark the location as a TUM Location / Room ID, prefix it with `tum_id:`
   * to mark the location as raw latitude and longitude (in the form of lat, lon), prefix it with `latlon:`
   * if the location isn't prefixed, it's evaluated by the MVG API
+* To set a new home for the day, add an event with `home_override` in the tags and a set location
+* To disable the routes from / to home for the day, add an event with `disable_home` in the tags
 * You can also mark TUM Events as "cancelled" by creating an event in your main calendar at exactly the same start- and ending-time with the title "Ausfall". You can further specify which event you want cancelled by adding a space and a string that's unique to the title of that event (e.g. "Ausfall Diskrete Strukturen")
 * By default, routes between events are planned directly after the first of the two events is finished. To change this behaviour, add `route_arrive` to the metadata of the second event
 * To override the default Before- and After-Margin for an event, simply add `margin_before=<new_margin>` and `margin_after=<new_margin>` (e.g. `margin_before=0` or `margin_before=5.5`) to the event's metadata

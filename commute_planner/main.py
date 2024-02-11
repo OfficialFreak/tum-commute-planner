@@ -106,6 +106,7 @@ def get_tum_id_location(location_id: str):
 def get_events_on_day(day: date):
     events_today = get_events_from_calendar(settings.TUM_CALENDAR_ID, day)
     main_calendar_events = get_events_from_calendar(settings.MAIN_CALENDAR_ID, day)
+    home_override = {}
 
     for main_calendar_event in main_calendar_events:
         if "Ausfall" in main_calendar_event.get("summary", ""):
@@ -115,13 +116,19 @@ def get_events_on_day(day: date):
                     ((len(main_calendar_event) < 8) or (
                             main_calendar_event["summary"][8:] in tum_event.get("summary", "")))
             )]
+        if "home_override" in main_calendar_event.get("description", ""):
+            home_override["home_location"] = get_location(main_calendar_event)
+        if "home_disabled" in main_calendar_event.get("description", ""):
+            home_override["disabled"] = True
 
     events_today.extend([main_calendar_event for main_calendar_event in main_calendar_events if
-                         not ("Ausfall" in main_calendar_event.get("summary", ""))])
+                         not ("Ausfall" in main_calendar_event.get("summary", ""))
+                         and not ("home_override" in main_calendar_event.get("description", ""))
+                         and not ("home_disabled" in main_calendar_event.get("description", ""))])
 
     events_today.sort(key=lambda x: datetime.fromisoformat(x["start"]["dateTime"]))
 
-    return events_today
+    return events_today, home_override
 
 
 def get_events_from_calendar(calendar_id: str, day: date):
@@ -148,13 +155,16 @@ def get_events_from_calendar(calendar_id: str, day: date):
         events = remove_streams(events_result.get("items", []))
     elif main_calendar:
         events = [event for event in events_result.get("items", []) if
-                  "route_relevant" in event.get("description", "") or "Ausfall" in event.get("summary", "")]
+                  "route_relevant" in event.get("description", "") or
+                  "home_override" in event.get("description", "") or
+                  "home_disabled" in event.get("description", "") or
+                  "Ausfall" in event.get("summary", "")]
 
     return events
 
 
 def get_metadata(event):
-    split_flags = event.get("description", "").split("\n")[0].split(", ")
+    split_flags = event.get("description", "").split("<br>")[0].split(", ")
     metadata = {}
     for data in split_flags:
         res = data.split("=")
@@ -166,10 +176,25 @@ def get_metadata(event):
     return metadata
 
 
-def get_routes_for_events(events_today):
+def get_routes_for_events(events_today, home_override):
     routes = []
     if len(events_today) == 0:
         return []
+
+    home_pos = home_override.get("location", None) if home_override.get("location", None) is not None \
+        else settings.HOME_POS
+
+    # Routes between events
+    if len(events_today) == 1:
+        return routes
+
+    for i in range(0, len(events_today) - 1):  # -1 because the last event doesn't have one after
+        route = route_between_events(events_today[i], events_today[i + 1])
+        if route is not None:
+            routes.append(route)
+
+    if home_override.get("disabled", False):
+        return routes
 
     # From home to first event
     event_metadata = get_metadata(events_today[0])
@@ -178,7 +203,7 @@ def get_routes_for_events(events_today):
         minutes=margin_before)
     location_data = get_location(events_today[0])
     if location_data is not None:
-        route = get_route(settings.HOME_POS, location_data, arrival_time,
+        route = get_route(home_pos, location_data, arrival_time,
                           api_="DB" if event_metadata.get("db_routing", False) else "MVG")
         if route is not None:
             routes.append(route)
@@ -190,17 +215,8 @@ def get_routes_for_events(events_today):
         minutes=margin_after)
     location_data = get_location(events_today[-1])
     if location_data is not None:
-        route = get_route(location_data, settings.HOME_POS, departure_time, type_="DEPARTURE",
+        route = get_route(location_data, home_pos, departure_time, type_="DEPARTURE",
                           api_="DB" if event_metadata.get("db_routing", False) else "MVG")
-        if route is not None:
-            routes.append(route)
-
-    # Routes between events
-    if len(events_today) == 1:
-        return routes
-
-    for i in range(0, len(events_today) - 1):  # -1 because the last event doesn't have one after
-        route = route_between_events(events_today[i], events_today[i + 1])
         if route is not None:
             routes.append(route)
 
@@ -265,9 +281,9 @@ def event_equals_route(event, route: Route) -> bool:
     return start_time_check and end_time_check and summary_check
 
 
-def refresh_day(day, known_events):
+def refresh_day(day, known_events, known_home_override):
     current_routes = get_events_from_calendar(settings.ROUTE_CALENDAR_ID, day)
-    events_today = get_events_on_day(day)
+    events_today, home_override = get_events_on_day(day)
 
     has_upcoming_route = False
     for route in current_routes:
@@ -277,10 +293,10 @@ def refresh_day(day, known_events):
             has_upcoming_route = True
             break
 
-    if events_today == known_events and not has_upcoming_route:
-        return events_today, False
+    if events_today == known_events and home_override == known_home_override and not has_upcoming_route:
+        return events_today, has_upcoming_route, home_override
 
-    target_routes = get_routes_for_events(events_today)
+    target_routes = get_routes_for_events(events_today, home_override)
 
     events_to_remove = [event for event in current_routes if
                         not any(event_equals_route(event, route) for route in target_routes)]
@@ -294,11 +310,12 @@ def refresh_day(day, known_events):
         add_route_to_calendar(route)
         print(f"[{day}] {TerminalStyles.OKGREEN}Created new event {route.calendar_summary}{TerminalStyles.ENDC}")
 
-    return events_today, has_upcoming_route
+    return events_today, has_upcoming_route, home_override
 
 
-def refresh_week(day_of_week: date, known_events) -> dict[int, list | None]:
+def refresh_week(day_of_week: date, known_events, known_home_overrides):
     new_events = {}
+    new_known_home_overrides = {}
     monday = day_of_week - timedelta(days=day_of_week.weekday())
     for day in range(0, 7):
         current_day = monday + timedelta(days=day)
@@ -306,42 +323,47 @@ def refresh_week(day_of_week: date, known_events) -> dict[int, list | None]:
             print(f"[{current_day}] is in the past or today, skipping")
             continue
         print(f"[{current_day}] Refreshing...")
-        new_events[day] = refresh_day(current_day, known_events[day])[0]
+        new_events[day], _, new_known_home_overrides[day] = refresh_day(
+            current_day, known_events[day], known_home_overrides[day])
 
-    return new_events
+    print(new_events, new_known_home_overrides)
+    return new_events, new_known_home_overrides
 
 
 async def update_week_except_today_loop():
     known_events: dict[int, list | None] = {i: None for i in range(7)}
+    known_home_overrides = {i: None for i in range(7)}
     known_events_monday = date.today() - timedelta(days=date.today().weekday())
 
     while 1:
         print(f"[{known_events_monday}] {TerminalStyles.UNDERLINE}Starting Update All Loop{TerminalStyles.ENDC}")
         if date.today() - timedelta(days=date.today().weekday()) != known_events_monday:
             known_events = {i: None for i in range(7)}
+            known_home_overrides = {i: None for i in range(7)}
             known_events_monday = date.today() - timedelta(days=date.today().weekday())
 
-        known_events = refresh_week(date.today(), known_events)
+        known_events, known_home_overrides = refresh_week(date.today(), known_events, known_home_overrides)
         print(f"[{known_events_monday}] {TerminalStyles.OKGREEN}Finished Update All Loop{TerminalStyles.ENDC}")
         await asyncio.sleep(10 * 60)
 
 
 async def update_following_weeks():
-    known_events: dict[int, list | None] = {i: None for i in range(7 * settings.PRE_CALC_WEEK_COUNT)}
+    known_events = {i: {j: None for j in range(7)} for i in range(settings.PRE_CALC_WEEK_COUNT)}
+    known_home_overrides = {i: {j: None for j in range(7)} for i in range(settings.PRE_CALC_WEEK_COUNT)}
     known_events_monday = date.today() - timedelta(days=date.today().weekday() - 7)
 
     while 1:
         print(
             f"[{known_events_monday}] {TerminalStyles.UNDERLINE}Starting Update Following Weeks Loop{TerminalStyles.ENDC}")
         if date.today() - timedelta(days=date.today().weekday() - 7) != known_events_monday:
-            known_events = {i: None for i in range(7 * settings.PRE_CALC_WEEK_COUNT)}
+            known_events = {i: {j: None for j in range(7)} for i in range(settings.PRE_CALC_WEEK_COUNT)}
+            known_home_overrides = {i: {j: None for j in range(7)} for i in range(settings.PRE_CALC_WEEK_COUNT)}
             known_events_monday = date.today() - timedelta(days=date.today().weekday() - 7)
 
-        new_known_events = {}
-        for week in range(1, settings.PRE_CALC_WEEK_COUNT + 1):
-            date_today = date.today() + timedelta(days=7 * week)
-            known_events = refresh_week(date_today, known_events)
-        known_events = new_known_events
+        for week in range(settings.PRE_CALC_WEEK_COUNT):
+            date_today = date.today() + timedelta(days=7 * (week+1))
+            known_events[week], known_home_overrides[week] = refresh_week(
+                date_today, known_events[week], known_home_overrides[week])
         print(
             f"[{known_events_monday}] {TerminalStyles.OKGREEN}Finished Update Following Weeks Loop{TerminalStyles.ENDC}")
         await asyncio.sleep(30 * 60)
@@ -349,19 +371,23 @@ async def update_following_weeks():
 
 async def update_today_loop():
     known_events: None | list = None
+    known_home_override = None
     known_events_day = date.today()
 
     while 1:
         print(f"[{known_events_day}] {TerminalStyles.UNDERLINE}Starting Update Today Loop{TerminalStyles.ENDC}")
         if date.today() != known_events_day:
             known_events = None
+            known_home_override = None
             known_events_day = date.today()
 
-        known_events, today_has_upcoming_route = refresh_day(date.today(), known_events)
+        known_events, today_has_upcoming_route, known_home_override = refresh_day(
+            date.today(), known_events, known_home_override)
         print(f"[{known_events_day}] {TerminalStyles.OKGREEN}Finished Update Today Loop{TerminalStyles.ENDC}")
         if today_has_upcoming_route:
             print(
-                f"[{known_events_day}] {TerminalStyles.WARNING}Has upcoming route, 1min waiting times...{TerminalStyles.ENDC}")
+                f"[{known_events_day}] {TerminalStyles.WARNING}Has upcoming route, 1min waiting times...{
+                TerminalStyles.ENDC}")
             await asyncio.sleep(1 * 60)
         else:
             print(f"[{known_events_day}] No upcoming route, 5min waiting time")
