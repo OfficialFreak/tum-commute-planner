@@ -35,7 +35,7 @@ def get_location(event):
         return get_tum_id_location(location_field.split("(")[-1][:-1])
 
     # Search for exact ID
-    if location_field.startswith("tum:"):
+    if location_field.startswith("tum_id:"):
         return get_tum_id_location(location_field[7:])
 
     # Try to interpret Location using nav.tum.de Search
