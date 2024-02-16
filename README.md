@@ -53,3 +53,4 @@ Planned features include:
   * calculate a route to the nearest Mensa at the "optimal time" (figuring out an optimal time is the reason why this is not implemented at the moment) and 
   * display its menu inside the calendar
 * Creating Routing API parsers / users for more cities
+* Reduce waiting time if an event has changed (user is currently planning and would like more frequent updates) to maybe a minute of 10s updates
