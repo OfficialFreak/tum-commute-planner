@@ -49,6 +49,7 @@ Issues and Pull-Requests are very welcome. I will also continue to work on this 
 
 Planned features include:
 * Correctly parsing Exams / Add option to specify correct location (as currently there's an event for every exam location)
+  * Not by overwriting but by selecting somehow
 * Some sort of integration of the Mensa (e.g. by using the [eat-api](https://eat-api.tum.sexy)) to:
   * calculate a route to the nearest Mensa at the "optimal time" (figuring out an optimal time is the reason why this is not implemented at the moment) and 
   * display its menu inside the calendar
