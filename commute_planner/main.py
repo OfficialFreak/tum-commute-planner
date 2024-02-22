@@ -1,4 +1,5 @@
 import asyncio
+import socket
 from datetime import datetime, date, timedelta
 from typing import Optional
 import requests
@@ -139,17 +140,21 @@ def get_events_from_calendar(calendar_id: str, day: date):
     time_min = datetime.combine(day, datetime.min.time())
     time_max = datetime.combine(day, datetime.max.time())
 
-    events_result = (
-        calendar_client.service.events()
-        .list(
-            calendarId=calendar_id,
-            timeMin=time_min.isoformat() + "Z",
-            timeMax=time_max.isoformat() + "Z",
-            singleEvents=True,
-            orderBy="startTime",
+    try:
+        events_result = (
+            calendar_client.service.events()
+            .list(
+                calendarId=calendar_id,
+                timeMin=time_min.isoformat() + "Z",
+                timeMax=time_max.isoformat() + "Z",
+                singleEvents=True,
+                orderBy="startTime",
+            )
+            .execute()
         )
-        .execute()
-    )
+    except socket.gaierror:
+        return get_events_from_calendar(calendar_id, day)
+    
     events = events_result.get("items", [])
     if tum_calendar:
         events = remove_streams(events_result.get("items", []))
