@@ -7,9 +7,10 @@ Creates Google Calendar Events with a recommended route from your home to Univer
 
 
 ## Getting started
-1. ⬇ Install the requirements `pip3 install -r requirements.txt`
-2. 🔑 Follow the instructions to get the `credentials.json`: https://developers.google.com/calendar/api/quickstart/python?hl=en
-3. Copy `.env.example` and rename it to `.env` and enter the required variables
+1. Create a virtual environment using `python -m venv .venv` and activate it
+2. ⬇ Install the requirements `pip3 install -r requirements.txt`
+3. 🔑 Follow the instructions to get the `credentials.json`: https://developers.google.com/calendar/api/quickstart/python?hl=en
+4. Copy `.env.example` and rename it to `.env` and enter the required variables
     * You can get your calendar IDs from https://developers.google.com/calendar/api/v3/reference/calendarList/list?hl=en 
         * `TUM_CALENDAR_ID` is the TUM Calendar directly imported into Google Calendar
         * `MAIN_CALENDAR_ID` is your main Calendar, which all of your normal events are in. By default, all events are ignored for the route-planning.
@@ -17,7 +18,7 @@ Creates Google Calendar Events with a recommended route from your home to Univer
         * `HOME_LATITUDE` and `HOME_LONGITUDE` are the coordinates, the script calculates a route to before the first and after the last event
         * `TIME_MARGIN_BEFORE_IN_MINUTES` and `TIME_MARGIN_AFTER_IN_MINUTES` are responsible for the time margin the planner leaves between the start / end of an event and a route
         * `MIN_ROUTE_DISTANCE_IN_KM` is the minimum distance two events have to be, so the route planner plans a route between them
-4. Start the script by running `python -m commute_planner.main`
+5. Start the script by running `python -m commute_planner.main`
 
 ## Usage
 * When setup correctly, the script will continuously update the routes in your calendar
