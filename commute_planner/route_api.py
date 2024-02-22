@@ -236,7 +236,6 @@ def get_route_from_db(origin, destination, arrival_time, type_: Literal["ARRIVAL
     except Exception as ex:
         print(ex)
         print(response.status_code, response.headers, response.content)
-        asyncio.sleep(10)
         return get_route_from_db(origin, destination, arrival_time, type_)
         # raise Exception("Invalid DB API Response") from ex
 
@@ -258,7 +257,6 @@ def get_route_from_mvg(origin, destination, arrival_time, type_: Literal["ARRIVA
     except Exception as ex:
         print(ex)
         print(response.status_code, response.headers, response.content)
-        asyncio.sleep(10)
         return get_route_from_mvg(origin, destination, arrival_time, type_)
         # raise Exception("Invalid MVG API Response") from ex
 
