@@ -231,7 +231,7 @@ def route_between_events(event1, event2) -> Optional[Route]:
 
     event1_metadata = get_metadata(event1)
     event2_metadata = get_metadata(event2)
-    if event2_metadata.get("route_arrive", False):
+    if event2_metadata.get("arrive", False):
         margin_before = float(event2_metadata.get("margin_before", settings.TIME_MARGIN_BEFORE))
         arrival_time = datetime.fromisoformat(event2["start"]["dateTime"]).replace(tzinfo=None) - timedelta(
             minutes=margin_before)
