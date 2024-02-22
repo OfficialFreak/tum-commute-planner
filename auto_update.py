@@ -13,7 +13,7 @@ def get_latest_commit():
 
 
 def main():
-    print("Starting Auto-Update Script.")
+    print("Starting Auto-Update Script. (This is script is purely for running it on a Raspberry Pi)")
     latest_known_commit = None
     script_process = None
     while 1:
@@ -30,8 +30,8 @@ def main():
             subprocess.run(["git", "pull"])
             print("Restarting Commute Planner")
             script_process = subprocess.Popen(
-                [".venv/Scripts/python.exe", "-m", "commute_planner.main"],
-                creationflags=subprocess.CREATE_NEW_CONSOLE)
+                "lxterminal --command=\".venv/Scripts/python.exe -m commute_planner.main\"",
+                shell=True)
             latest_known_commit = latest_commit
         time.sleep(60 * 1)
 
