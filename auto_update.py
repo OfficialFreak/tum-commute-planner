@@ -25,9 +25,6 @@ def main():
             print("New commit found.")
             if script_process is not None:
                 subprocess.Popen.terminate(script_process)
-                while subprocess.Popen.poll(script_process) is not None:
-                    # Wait until old script has terminated
-                    time.sleep(0.25)
             # Refresh Repo
             print("Pulling changes")
             subprocess.run(["git", "pull"])

@@ -154,7 +154,7 @@ def get_events_from_calendar(calendar_id: str, day: date):
         )
     except socket.gaierror:
         return get_events_from_calendar(calendar_id, day)
-    
+
     events = events_result.get("items", [])
     if tum_calendar:
         events = remove_streams(events_result.get("items", []))
