@@ -163,7 +163,7 @@ class Route:
 
     @property
     def calendar_description(self) -> str:
-        return '\n'.join([route_part.calendar_repr for route_part in self.parts]) + f"\n\n{bold('Ankunft:')} " + \
+        return '\n\n'.join([route_part.calendar_repr for route_part in self.parts]) + f"\n\n{bold('Ankunft:')} " + \
             self.parts[-1].arrival.strftime('%H:%M') + f" Uhr\n" + italic(f"Dauer: {self.duration}")
 
     @property
