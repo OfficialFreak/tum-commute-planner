@@ -8,12 +8,11 @@ def get_latest_commit():
         r = requests.get("https://api.github.com/repos/OfficialFreak/tum-commute-planner/commits/master")
         return r.json()["sha"]
     except Exception as ex:
-        print(ex)
         return None
 
 
 def main():
-    print("Starting Auto-Update Script. (This is script is purely for running it on a Raspberry Pi)")
+    print("Starting Auto-Update Script.")
     latest_known_commit = None
     script_process = None
     while 1:
@@ -29,9 +28,7 @@ def main():
             print("Pulling changes")
             subprocess.run(["git", "pull"])
             print("Restarting Commute Planner")
-            script_process = subprocess.Popen(
-                "lxterminal --command=\".venv/Scripts/python.exe -m commute_planner.main\"",
-                shell=True)
+            script_process = subprocess.Popen([".venv/Scripts/python.exe", "-m", "commute_planner.main"])
             latest_known_commit = latest_commit
         time.sleep(60 * 1)
 
