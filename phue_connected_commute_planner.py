@@ -17,15 +17,13 @@ def update_lamps(route):
     # decide which color to set
     departure_delta = datetime.fromisoformat(route["start"]["dateTime"]).replace(tzinfo=None) - datetime.now()
 
-    # cold green -> cyan -> magenta -> color changing -> off
+    # cyan -> purple -> magenta -> color changing -> off
 
-    if departure_delta > timedelta(minutes=15):
-        # Set to cold green
+    if departure_delta > timedelta(minutes=10):
+        # Set to cyan
         b.set_light([1, 2, 3], {
             "on": True,
-            'bri': 254,
-            'hue': 30913,
-            'sat': 254
+            'bri': 254, 'hue': 39675, 'sat': 240
         })
     elif departure_delta < timedelta(minutes=1.5):
         b.set_light([1, 2, 3], "on", False)
@@ -44,12 +42,10 @@ def update_lamps(route):
             'sat': 254
         })
     elif departure_delta < timedelta(minutes=10):
-        # set to cyan
+        # set to purple
         b.set_light([1, 2, 3], {
             "on": True,
-            'bri': 254,
-            'hue': 39675,
-            'sat': 240
+            'bri': 254, 'hue': 49962, 'sat': 254
         })
 
 
