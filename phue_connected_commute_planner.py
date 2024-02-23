@@ -54,7 +54,7 @@ def update_lamps(route):
 
 
 b: Bridge
-BRIDGE_IP = "192.168.0.186" # Enter the ip of your Bridge here
+BRIDGE_IP = "192.168.0.186"  # Enter the ip of your Bridge here
 
 
 async def main():
