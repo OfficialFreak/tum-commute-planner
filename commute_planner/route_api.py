@@ -188,6 +188,14 @@ class Route:
     def duration(self) -> timedelta:
         return self.arrival - self.departure
 
+    @property
+    def start(self) -> Location:
+        return self.parts[0].start
+
+    @property
+    def end(self) -> Location:
+        return self.parts[0].end
+
 
 def get_route_from_db(origin, destination, arrival_time, type_: Literal["ARRIVAL", "DEPARTURE"]):
     response = requests.post("https://www.bahn.de/web/api/angebote/fahrplan", json={

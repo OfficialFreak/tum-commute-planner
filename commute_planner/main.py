@@ -257,7 +257,12 @@ def add_route_to_calendar(route: Route):
     event = {
         'summary': f"{route.calendar_summary}",
         'location': str(route.parts[-1].end),
-        'description': f"{underlined(bold('Routenbeschreibung'))}\n\n{route.calendar_description}",
+        'description': f"{
+                            route.start.coordinates[0]}, {
+                            route.start.coordinates[1]} | {
+                            route.end.coordinates[0]}, {
+                            route.end.coordinates[1]}\n{
+                            underlined(bold('Routenbeschreibung'))}\n\n{route.calendar_description}",
         'start': {
             'dateTime': (route.departure - timedelta(hours=1)).isoformat(),
             'timeZone': 'UTC',
@@ -288,16 +293,16 @@ def refresh_day(day, known_events, known_home_override):
     current_routes = get_events_from_calendar(settings.ROUTE_CALENDAR_ID, day)
     events_today, home_override = get_events_on_day(day)
 
-    has_upcoming_route = False
+    upcoming_route = None
     for route in current_routes:
         if (datetime.fromisoformat(route["start"]["dateTime"]).replace(tzinfo=None) > datetime.now() and
-                datetime.fromisoformat(route["start"]["dateTime"]).replace(tzinfo=None) - datetime.now() < timedelta(
+                (datetime.fromisoformat(route["start"]["dateTime"]).replace(tzinfo=None) - datetime.now()) < timedelta(
                     minutes=30)):
-            has_upcoming_route = True
+            upcoming_route = route
             break
 
-    if events_today == known_events and home_override == known_home_override and not has_upcoming_route:
-        return events_today, has_upcoming_route, home_override
+    if events_today == known_events and home_override == known_home_override and not upcoming_route:
+        return events_today, upcoming_route, home_override
 
     target_routes = get_routes_for_events(events_today, home_override)
 
@@ -310,10 +315,15 @@ def refresh_day(day, known_events, known_home_override):
         CalendarClient().service.events().delete(calendarId=settings.ROUTE_CALENDAR_ID, eventId=event['id']).execute()
         print(f"[{day}] {TerminalStyles.HEADER}Removed event {event['id']}{TerminalStyles.ENDC}")
     for route in routes_to_add:
-        add_route_to_calendar(route)
+        route_event = add_route_to_calendar(route)
+        # Check for new upcoming route
+        if (datetime.fromisoformat(route_event["start"]["dateTime"]).replace(tzinfo=None) > datetime.now() and
+            (datetime.fromisoformat(route_event["start"]["dateTime"]).replace(tzinfo=None) - datetime.now()) <
+                timedelta(minutes=30)):
+            upcoming_route = route_event
         print(f"[{day}] {TerminalStyles.OKGREEN}Created new event {route.calendar_summary}{TerminalStyles.ENDC}")
 
-    return events_today, has_upcoming_route, home_override
+    return events_today, upcoming_route, home_override
 
 
 def refresh_week(day_of_week: date, known_events, known_home_overrides):
@@ -363,7 +373,7 @@ async def update_following_weeks():
             known_events_monday = date.today() - timedelta(days=date.today().weekday() - 7)
 
         for week in range(settings.PRE_CALC_WEEK_COUNT):
-            date_today = date.today() + timedelta(days=7 * (week+1))
+            date_today = date.today() + timedelta(days=7 * (week + 1))
             known_events[week], known_home_overrides[week] = refresh_week(
                 date_today, known_events[week], known_home_overrides[week])
         print(
@@ -371,7 +381,7 @@ async def update_following_weeks():
         await asyncio.sleep(30 * 60)
 
 
-async def update_today_loop():
+async def update_today_loop(upcoming_route_callback=lambda route: None):
     known_events: None | list = None
     known_home_override = None
     known_events_day = date.today()
@@ -383,13 +393,14 @@ async def update_today_loop():
             known_home_override = None
             known_events_day = date.today()
 
-        known_events, today_has_upcoming_route, known_home_override = refresh_day(
+        known_events, upcoming_route, known_home_override = refresh_day(
             date.today(), known_events, known_home_override)
         print(f"[{known_events_day}] {TerminalStyles.OKGREEN}Finished Update Today Loop{TerminalStyles.ENDC}")
-        if today_has_upcoming_route:
+        if upcoming_route:
             print(
                 f"[{known_events_day}] {TerminalStyles.WARNING}Has upcoming route, 1min waiting times...{
-                TerminalStyles.ENDC}")
+                    TerminalStyles.ENDC}")
+            upcoming_route_callback(upcoming_route)
             await asyncio.sleep(1 * 60)
         else:
             print(f"[{known_events_day}] No upcoming route, 5min waiting time")

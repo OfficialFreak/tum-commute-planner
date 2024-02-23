@@ -1,3 +1,4 @@
+# I advise against using this as it automatically downloads and runs code from this repository
 import os
 
 import requests
@@ -29,7 +30,10 @@ def main():
             print("Pulling changes")
             subprocess.run(["git", "pull"])
             print("Restarting Commute Planner")
-            script_process = subprocess.Popen([os.environ.get("VENV_PYTHON_EXECUTABLE"), "-m", "commute_planner.main"])
+            # script_process = subprocess.Popen([
+            #   os.environ.get("VENV_PYTHON_EXECUTABLE"), "-m", "commute_planner.main"])
+            script_process = subprocess.Popen([
+                os.environ.get("VENV_PYTHON_EXECUTABLE"), "phue_connected_commute_planner.py"])
             latest_known_commit = latest_commit
         time.sleep(60 * 1)
 
