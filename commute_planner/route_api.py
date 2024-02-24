@@ -194,7 +194,7 @@ class Route:
 
     @property
     def end(self) -> Location:
-        return self.parts[0].end
+        return self.parts[-1].end
 
 
 def get_route_from_db(origin, destination, arrival_time, type_: Literal["ARRIVAL", "DEPARTURE"]):
