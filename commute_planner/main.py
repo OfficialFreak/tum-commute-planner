@@ -258,10 +258,10 @@ def add_route_to_calendar(route: Route):
         'summary': f"{route.calendar_summary}",
         'location': str(route.parts[-1].end),
         'description': f"{
-                            route.start.coordinates[0]}, {
-                            route.start.coordinates[1]} | {
-                            route.end.coordinates[0]}, {
-                            route.end.coordinates[1]}\n{
+                            route.start.coordinates[0] if route.start.coordinates is not None else 0}, {
+                            route.start.coordinates[1] if route.start.coordinates is not None else 0} | {
+                            route.end.coordinates[0] if route.end.coordinates is not None else 0}, {
+                            route.end.coordinates[1] if route.end.coordinates is not None else 0}\n{
                             underlined(bold('Routenbeschreibung'))}\n\n{route.calendar_description}",
         'start': {
             'dateTime': (route.departure - timedelta(hours=1)).isoformat(),
