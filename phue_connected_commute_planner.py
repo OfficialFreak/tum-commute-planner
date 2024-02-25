@@ -4,7 +4,7 @@ from geopy.distance import distance
 from phue import Bridge
 
 from commute_planner.main import *
-from commute_planner.settings import HOME_POS
+from commute_planner.settings import HOME_POS, MIN_ROUTE_DISTANCE
 
 
 def update_lamps(route):
@@ -12,7 +12,7 @@ def update_lamps(route):
     # check if start is at home (if not, triggering the lamps would be kinda dumb)
     start_coordinates = route["description"].split("\n")[0].split(" | ")[0].split(", ")
     start_coordinates = (float(start_coordinates[0]), float(start_coordinates[1]))
-    if distance(start_coordinates, HOME_POS).kilometers > 0.4:
+    if distance(start_coordinates, HOME_POS).kilometers > MIN_ROUTE_DISTANCE:
         return
     # decide which color to set
     departure_delta = datetime.fromisoformat(route["start"]["dateTime"]).replace(tzinfo=None) - datetime.now()
