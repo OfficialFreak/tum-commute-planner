@@ -163,6 +163,7 @@ def get_events_from_calendar(calendar_id: str, day: date):
                   "route_relevant" in event.get("description", "") or
                   "home_override" in event.get("description", "") or
                   "home_disabled" in event.get("description", "") or
+                  "no_route" in event.get("description", "") or
                   "Ausfall" in event.get("summary", "")]
 
     return events
@@ -192,27 +193,29 @@ def get_routes_for_events(events_today, home_override):
     if not home_override.get("disabled", False):
         # From home to first event
         event_metadata = get_metadata(events_today[0])
-        margin_before = float(event_metadata.get("margin_before", settings.TIME_MARGIN_BEFORE))
-        arrival_time = datetime.fromisoformat(events_today[0]["start"]["dateTime"]).replace(tzinfo=None) - timedelta(
-            minutes=margin_before)
-        location_data = get_location(events_today[0])
-        if location_data is not None:
-            route = get_route(home_pos, location_data, arrival_time,
-                              api_="DB" if event_metadata.get("db_routing", False) else "MVG")
-            if route is not None:
-                routes.append(route)
+        if not event_metadata.get("no_route", False):
+            margin_before = float(event_metadata.get("margin_before", settings.TIME_MARGIN_BEFORE))
+            arrival_time = datetime.fromisoformat(events_today[0]["start"]["dateTime"]).replace(tzinfo=None) - timedelta(
+                minutes=margin_before)
+            location_data = get_location(events_today[0])
+            if location_data is not None:
+                route = get_route(home_pos, location_data, arrival_time,
+                                  api_="DB" if event_metadata.get("db_routing", False) else "MVG")
+                if route is not None:
+                    routes.append(route)
 
         # From last event to home
         event_metadata = get_metadata(events_today[-1])
-        margin_after = float(event_metadata.get("margin_after", settings.TIME_MARGIN_AFTER))
-        departure_time = datetime.fromisoformat(events_today[-1]["end"]["dateTime"]).replace(tzinfo=None) + timedelta(
-            minutes=margin_after)
-        location_data = get_location(events_today[-1])
-        if location_data is not None:
-            route = get_route(location_data, home_pos, departure_time, type_="DEPARTURE",
-                              api_="DB" if event_metadata.get("db_routing", False) else "MVG")
-            if route is not None:
-                routes.append(route)
+        if not event_metadata.get("no_route", False):
+            margin_after = float(event_metadata.get("margin_after", settings.TIME_MARGIN_AFTER))
+            departure_time = datetime.fromisoformat(events_today[-1]["end"]["dateTime"]).replace(tzinfo=None) + timedelta(
+                minutes=margin_after)
+            location_data = get_location(events_today[-1])
+            if location_data is not None:
+                route = get_route(location_data, home_pos, departure_time, type_="DEPARTURE",
+                                  api_="DB" if event_metadata.get("db_routing", False) else "MVG")
+                if route is not None:
+                    routes.append(route)
 
     # Routes between events
     if len(events_today) == 1:
@@ -236,6 +239,10 @@ def route_between_events(event1, event2) -> Optional[Route]:
 
     event1_metadata = get_metadata(event1)
     event2_metadata = get_metadata(event2)
+
+    if event1_metadata.get("no_route", False) or event2_metadata.get("no_route", False):
+        return None
+
     if event2_metadata.get("arrive", False):
         margin_before = float(event2_metadata.get("margin_before", settings.TIME_MARGIN_BEFORE))
         arrival_time = datetime.fromisoformat(event2["start"]["dateTime"]).replace(tzinfo=None) - timedelta(

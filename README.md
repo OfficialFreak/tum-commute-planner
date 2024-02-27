@@ -37,6 +37,7 @@ Creates Google Calendar Events with a recommended route from your home to Univer
   * this can be combined with `latlon:` in the location as the MVG API doesn't know about stations outside of Munich
 * `home_override`: set a new home for the day (Location required)
 * `home_disabled`: disable the routes from / to home for the day
+* `no_route`: prevent a route from being planned from or to this event (e.g. in an event "Commuting by car")
 
 ### Location Field
 * The route planner can accept several forms of Locations:
