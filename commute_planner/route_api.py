@@ -292,12 +292,12 @@ def get_best_route(routes: list[Route], time: datetime, type_: Literal["ARRIVAL"
 def get_route(origin, destination, time, type_: Literal["ARRIVAL", "DEPARTURE"] = "ARRIVAL",
               api_: Literal["MVG", "DB"] = "mvg", _try=0) -> Optional[Route]:
     if distance.distance(origin, destination).kilometers <= settings.MIN_ROUTE_DISTANCE:
-        print(f"Ignoring because too close to origin (distance of {
+        print(f"[{time}] Ignoring because too close to origin (distance of {
             distance.distance(origin, destination).kilometers}km)")
         return None
     best_route = get_best_route(get_routes(origin, destination, time, type_, api_), time, type_)
     if best_route is None and _try < 3:  # If no route could be found, check 30 min earlier/later (max of 5 tries)
-        print("No route could be found, checking 30mins offset")
+        print(f"[{time}] No route could be found, checking 30mins offset")
         if type_ == "ARRIVAL":
             return get_route(origin, destination, time - timedelta(minutes=30), type_, api_, _try+1)
         return get_route(origin, destination, time + timedelta(minutes=30), type_, api_, _try+1)
