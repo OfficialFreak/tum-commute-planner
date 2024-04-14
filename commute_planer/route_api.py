@@ -103,9 +103,9 @@ class Route:
         for part in route_data["parts"]:
             self.parts.append(
                 RoutePart(
-                    datetime.fromisoformat(part["from"]["plannedDeparture"]).replace(tzinfo=utc),
+                    datetime.fromisoformat(part["from"]["plannedDeparture"]),
                     (datetime.fromisoformat(part["to"]["plannedDeparture"]) + timedelta(
-                        minutes=int(part["to"].get("arrivalDelayInMinutes", 0)))).replace(tzinfo=utc),
+                        minutes=int(part["to"].get("arrivalDelayInMinutes", 0)))),
                     Location(
                         part["from"]["name"],
                         part["from"]["place"],
@@ -133,10 +133,8 @@ class Route:
         for part in route_data["verbindungsAbschnitte"]:
             self.parts.append(
                 RoutePart(
-                    datetime.fromisoformat(part.get("ezAbfahrtsZeitpunkt", part["abfahrtsZeitpunkt"])).replace(
-                        tzinfo=utc),
-                    datetime.fromisoformat(part.get("ezAnkunftsZeitpunkt", part["ankunftsZeitpunkt"])).replace(
-                        tzinfo=utc),
+                    datetime.fromisoformat(part.get("ezAbfahrtsZeitpunkt", part["abfahrtsZeitpunkt"])),
+                    datetime.fromisoformat(part.get("ezAnkunftsZeitpunkt", part["ankunftsZeitpunkt"])),
                     Location(
                         part["abfahrtsOrt"],
                         "",
@@ -256,7 +254,7 @@ def get_route_from_mvg(origin, destination, arrival_time, type_: Literal["ARRIVA
         "originLongitude": origin[1],
         "destinationLatitude": destination[0],
         "destinationLongitude": destination[1],
-        "routingDateTime": (arrival_time - timedelta(hours=1)).isoformat() + "Z",
+        "routingDateTime": arrival_time.replace(tzinfo=None).isoformat() + "Z",
         "routingDateTimeIsArrival": type_ == "ARRIVAL",
         "transportTypes": "SCHIFF,RUFTAXI,BAHN,UBAHN,TRAM,SBAHN,BUS,REGIONAL_BUS"
     }, headers={"User-Agent": settings.USER_AGENT})
@@ -292,12 +290,12 @@ def get_best_route(routes: list[Route], time: datetime, type_: Literal["ARRIVAL"
 def get_route(origin, destination, time, type_: Literal["ARRIVAL", "DEPARTURE"] = "ARRIVAL",
               api_: Literal["MVG", "DB"] = "mvg", _try=0) -> Optional[Route]:
     if distance.distance(origin, destination).kilometers <= settings.MIN_ROUTE_DISTANCE:
-        print(f"[{time}] Ignoring because too close to origin (distance of {
+        print(f"[{time.strftime('%Y-%m-%d')}] Ignoring because too close to origin (distance of {
             distance.distance(origin, destination).kilometers}km)")
         return None
     best_route = get_best_route(get_routes(origin, destination, time, type_, api_), time, type_)
     if best_route is None and _try < 3:  # If no route could be found, check 30 min earlier/later (max of 5 tries)
-        print(f"[{time}] No route could be found, checking 30mins offset")
+        print(f"[{time.strftime('%Y-%m-%d')}] No route could be found, checking 30mins offset")
         if type_ == "ARRIVAL":
             return get_route(origin, destination, time - timedelta(minutes=30), type_, api_, _try+1)
         return get_route(origin, destination, time + timedelta(minutes=30), type_, api_, _try+1)

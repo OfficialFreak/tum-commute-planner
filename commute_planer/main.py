@@ -1,7 +1,9 @@
 import asyncio
 import socket
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, UTC
 from typing import Optional
+
+import pytz
 import requests
 
 from .calendar_client import CalendarClient, bold, underlined
@@ -79,7 +81,13 @@ def get_tum_location(query: str):
         }
     )
     response_json = response.json()
-    tum_id = response_json.get("sections", [{}])[0].get("entries", [{}])[0].get("id", None)
+    try:
+        tum_id = response_json.get("sections", [{}])[0].get("entries", [{}])[0].get("id", None)
+    except IndexError:
+        try:
+            tum_id = response_json.get("sections", [{}])[1].get("entries", [{}])[0].get("id", None)
+        except IndexError:
+            tum_id = None
     if tum_id is None:
         return None
     return get_tum_id_location(tum_id)
@@ -166,6 +174,11 @@ def get_events_from_calendar(calendar_id: str, day: date):
                   "no_route" in event.get("description", "") or
                   "Ausfall" in event.get("summary", "")]
 
+    for event in events:
+        event["created"] = datetime.fromisoformat(event["created"]).astimezone(pytz.utc).isoformat()
+        event["updated"] = datetime.fromisoformat(event["updated"]).astimezone(pytz.utc).isoformat()
+        event["start"]["dateTime"] = datetime.fromisoformat(event["start"]["dateTime"]).astimezone(pytz.utc).isoformat()
+        event["end"]["dateTime"] = datetime.fromisoformat(event["end"]["dateTime"]).astimezone(pytz.utc).isoformat()
     return events
 
 
@@ -195,7 +208,7 @@ def get_routes_for_events(events_today, home_override):
         event_metadata = get_metadata(events_today[0])
         if not event_metadata.get("no_route", False):
             margin_before = float(event_metadata.get("margin_before", settings.TIME_MARGIN_BEFORE))
-            arrival_time = (datetime.fromisoformat(events_today[0]["start"]["dateTime"]).replace(tzinfo=None) -
+            arrival_time = (datetime.fromisoformat(events_today[0]["start"]["dateTime"]) -
                             timedelta(minutes=margin_before))
             location_data = get_location(events_today[0])
             if location_data is not None:
@@ -203,12 +216,14 @@ def get_routes_for_events(events_today, home_override):
                                   api_="DB" if event_metadata.get("db_routing", False) else "MVG")
                 if route is not None:
                     routes.append(route)
+            else:
+                print(f"[{arrival_time.strftime('%Y-%m-%d')}] Skipping route relevant event, because location data is missing")
 
         # From last event to home
         event_metadata = get_metadata(events_today[-1])
         if not event_metadata.get("no_route", False):
             margin_after = float(event_metadata.get("margin_after", settings.TIME_MARGIN_AFTER))
-            departure_time = (datetime.fromisoformat(events_today[-1]["end"]["dateTime"]).replace(tzinfo=None) +
+            departure_time = (datetime.fromisoformat(events_today[-1]["end"]["dateTime"]) +
                               timedelta(minutes=margin_after))
             location_data = get_location(events_today[-1])
             if location_data is not None:
@@ -245,16 +260,14 @@ def route_between_events(event1, event2) -> Optional[Route]:
 
     if event2_metadata.get("arrive", False):
         margin_before = float(event2_metadata.get("margin_before", settings.TIME_MARGIN_BEFORE))
-        arrival_time = datetime.fromisoformat(event2["start"]["dateTime"]).replace(tzinfo=None) - timedelta(
-            minutes=margin_before)
+        arrival_time = datetime.fromisoformat(event2["start"]["dateTime"]) - timedelta(minutes=margin_before)
 
         return get_route(event1_location, event2_location, arrival_time, type_="ARRIVAL",
                          api_="DB" if event1_metadata.get("db_routing", False) or
                                       event2_metadata.get("db_routing", False) else "MVG")
 
     margin_after = float(event1_metadata.get("margin_after", settings.TIME_MARGIN_AFTER))
-    departure_time = datetime.fromisoformat(event1["end"]["dateTime"]).replace(tzinfo=None) + timedelta(
-        minutes=margin_after)
+    departure_time = datetime.fromisoformat(event1["end"]["dateTime"]) + timedelta(minutes=margin_after)
     return get_route(event1_location, event2_location, departure_time, type_="DEPARTURE",
                      api_="DB" if event1_metadata.get("db_routing", False) or
                                   event2_metadata.get("db_routing", False) else "MVG")
@@ -271,12 +284,10 @@ def add_route_to_calendar(route: Route):
             route.end.coordinates[1] if route.end.coordinates is not None else 0}\n{
             underlined(bold('Routenbeschreibung'))}\n\n{route.calendar_description}",
         'start': {
-            'dateTime': (route.departure - timedelta(hours=1)).isoformat(),
-            'timeZone': 'UTC',
+            'dateTime': route.departure.isoformat(),
         },
         'end': {
-            'dateTime': (route.arrival - timedelta(hours=1)).isoformat(),
-            'timeZone': 'UTC',
+            'dateTime': route.arrival.isoformat(),
         },
         'sendUpdates': "all"
     }
@@ -287,10 +298,8 @@ def add_route_to_calendar(route: Route):
 
 def event_equals_route(event, route: Route) -> bool:
     # Check start and end-time
-    start_time_check = datetime.fromisoformat(event["start"]["dateTime"]).replace(
-        tzinfo=None) == route.departure.replace(tzinfo=None)
-    end_time_check = datetime.fromisoformat(event["end"]["dateTime"]).replace(tzinfo=None) == route.arrival.replace(
-        tzinfo=None)
+    start_time_check = datetime.fromisoformat(event["start"]["dateTime"]) == route.departure
+    end_time_check = datetime.fromisoformat(event["end"]["dateTime"]) == route.arrival
     # Compare Summary
     summary_check = event.get("summary", "") == route.calendar_summary
     return start_time_check and end_time_check and summary_check
@@ -302,8 +311,8 @@ def refresh_day(day, known_events, known_home_override):
 
     upcoming_route = None
     for route in current_routes:
-        if (datetime.fromisoformat(route["start"]["dateTime"]).replace(tzinfo=None) > datetime.now() and
-                (datetime.fromisoformat(route["start"]["dateTime"]).replace(tzinfo=None) - datetime.now()) < timedelta(
+        if (datetime.fromisoformat(route["start"]["dateTime"]) > datetime.now(UTC) and
+                (datetime.fromisoformat(route["start"]["dateTime"]) - datetime.now(UTC)) < timedelta(
                     minutes=30)):
             upcoming_route = route
             break
@@ -324,9 +333,8 @@ def refresh_day(day, known_events, known_home_override):
     for route in routes_to_add:
         route_event = add_route_to_calendar(route)
         # Check for new upcoming route
-        if (datetime.fromisoformat(route_event["start"]["dateTime"]).replace(tzinfo=None) > datetime.now() and
-            (datetime.fromisoformat(route_event["start"]["dateTime"]).replace(tzinfo=None) - datetime.now()) <
-                timedelta(minutes=30)):
+        if (datetime.fromisoformat(route_event["start"]["dateTime"]) > datetime.now(UTC) and
+           (datetime.fromisoformat(route_event["start"]["dateTime"]) - datetime.now(UTC)) < timedelta(minutes=30)):
             upcoming_route = route_event
         print(f"[{day}] {TerminalStyles.OKGREEN}Created new event {route.calendar_summary}{TerminalStyles.ENDC}")
 

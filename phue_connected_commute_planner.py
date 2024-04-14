@@ -3,8 +3,8 @@
 from geopy.distance import distance
 from phue import Bridge
 
-from commute_planner.main import *
-from commute_planner.settings import HOME_POS, MIN_ROUTE_DISTANCE
+from commute_planer.main import *
+from commute_planer.settings import HOME_POS, MIN_ROUTE_DISTANCE
 
 
 def update_lamps(route):
