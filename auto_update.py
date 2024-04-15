@@ -32,7 +32,7 @@ def main():
                 subprocess.run(["git", "pull"])
                 print("Restarting Commute Planner")
                 # script_process = subprocess.Popen([
-                #   os.environ.get("VENV_PYTHON_EXECUTABLE"), "-m", "commute_planer.main"])
+                #   os.environ.get("VENV_PYTHON_EXECUTABLE"), "-m", "commute_planner.main"])
                 script_process = subprocess.Popen([
                     os.environ.get("VENV_PYTHON_EXECUTABLE"), "phue_connected_commute_planner.py"])
                 latest_known_commit = latest_commit

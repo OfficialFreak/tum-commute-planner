@@ -18,7 +18,7 @@ Creates Google Calendar Events with a recommended route from your home to Univer
         * `HOME_LATITUDE` and `HOME_LONGITUDE` are the coordinates, the script calculates a route to before the first and after the last event
         * `TIME_MARGIN_BEFORE_IN_MINUTES` and `TIME_MARGIN_AFTER_IN_MINUTES` are responsible for the time margin the planner leaves between the start / end of an event and a route
         * `MIN_ROUTE_DISTANCE_IN_KM` is the minimum distance two events have to be, so the route planner plans a route between them
-5. Start the script by running `python -m commute_planer.main`
+5. Start the script by running `python -m commute_planner.main`
 
 ## Usage
 * When setup correctly, the script will continuously update the routes in your calendar
