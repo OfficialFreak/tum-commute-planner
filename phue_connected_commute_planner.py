@@ -2,6 +2,7 @@
 
 from geopy.distance import distance
 from phue import Bridge
+from datetime import datetime, timezone
 
 from commute_planner.main import *
 from commute_planner.settings import HOME_POS, MIN_ROUTE_DISTANCE
@@ -15,7 +16,7 @@ def update_lamps(route):
     if distance(start_coordinates, HOME_POS).kilometers > MIN_ROUTE_DISTANCE:
         return
     # decide which color to set
-    departure_delta = datetime.fromisoformat(route["start"]["dateTime"]).replace(tzinfo=None) - datetime.now()
+    departure_delta = datetime.fromisoformat(route["start"]["dateTime"]) - datetime.now(timezone.utc)
 
     # cyan -> purple -> magenta -> color changing -> off
 
