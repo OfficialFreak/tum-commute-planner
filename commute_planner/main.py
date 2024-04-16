@@ -24,7 +24,7 @@ class TerminalStyles:
 
 
 def remove_streams(events):
-    return [event for event in events if "Videoübertragung aus" not in event.get("description", "")]
+    return [event for event in events if "Videoübertragung" not in event.get("description", "")]
 
 
 def get_location(event):
