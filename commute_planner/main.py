@@ -1,5 +1,6 @@
 import asyncio
 import socket
+import time
 from datetime import datetime, date, timedelta, UTC
 from typing import Optional
 
@@ -48,22 +49,40 @@ def get_location(event):
     if location_field.startswith("latlon:"):
         return [float(elem) for elem in location_field[7:].split(", ")]
 
-    # Try to interpret Location using MVG API
-    try:
-        response = requests.get("https://www.mvg.de/api/fib/v2/location", params={
-            "query": location_field
-        }, headers={"User-Agent": settings.USER_AGENT})
+    # Plain address: geocode via OpenStreetMap Nominatim
+    # (the MVG location endpoint /api/fib/v2/location no longer exists)
+    return geocode_address(location_field)
 
-        response_json = response.json()
+
+_GEOCODE_CACHE = {}
+
+
+def geocode_address(query: str):
+    """Resolve a free-text address to (lat, lon) via Nominatim, cached per query.
+
+    Nominatim's usage policy requires an identifying User-Agent and at most
+    one request per second; the cache keeps repeated lookups off the network.
+    """
+    if query in _GEOCODE_CACHE:
+        return _GEOCODE_CACHE[query]
+    result = None
+    try:
+        response = requests.get(
+            "https://nominatim.openstreetmap.org/search",
+            params={"q": query, "format": "json", "limit": 1},
+            headers={"User-Agent": settings.USER_AGENT},
+            timeout=20
+        )
+        data = response.json()
+        if isinstance(data, list) and data:
+            result = (float(data[0]["lat"]), float(data[0]["lon"]))
     except Exception as ex:
         print(ex)
-        return None
-
-    if (len(response_json) == 0 or
-            response_json[0].get("latitude", None) is None is response_json[0].get("longitude", None)):
-        return None
-
-    return response_json[0]["latitude"], response_json[0]["longitude"]
+    finally:
+        time.sleep(1)
+    if result is not None:
+        _GEOCODE_CACHE[query] = result
+    return result
 
 
 def get_tum_location(query: str):
@@ -96,7 +115,7 @@ def get_tum_location(query: str):
 def get_tum_id_location(location_id: str):
     try:
         response = requests.get(
-            f"{settings.TUM_API_URL}/api/get/{location_id}",
+            f"{settings.TUM_API_URL}/api/locations/{location_id}",
             headers={
                 "User-Agent": settings.USER_AGENT,
                 "Accept": "application/json"

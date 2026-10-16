@@ -1,4 +1,5 @@
 import asyncio
+import time
 from typing import Optional, Literal
 from datetime import datetime, timedelta
 import requests
@@ -10,6 +11,9 @@ from geopy import distance
 from .calendar_client import bold, italic
 
 from . import settings
+
+MAX_API_RETRIES = 3
+RETRY_DELAY_SECONDS = 5
 
 MOVEMENT_TYPES = {
     "PEDESTRIAN": "🚶‍",
@@ -107,19 +111,19 @@ class Route:
                     (datetime.fromisoformat(part["to"]["plannedDeparture"]) + timedelta(
                         minutes=int(part["to"].get("arrivalDelayInMinutes", 0)))),
                     Location(
-                        part["from"]["name"],
-                        part["from"]["place"],
+                        part["from"].get("name", ""),
+                        part["from"].get("place", ""),
                         (part["from"]["latitude"], part["from"]["longitude"])
                     ),
                     Location(
-                        part["to"]["name"],
-                        part["to"]["place"],
+                        part["to"].get("name", ""),
+                        part["to"].get("place", ""),
                         (part["to"]["latitude"], part["to"]["longitude"])
                     ),
                     MovementType(
-                        part["line"]["transportType"],
-                        part["line"]["label"],
-                        part["line"]["destination"]
+                        part.get("line", {}).get("transportType", "PEDESTRIAN"),
+                        part.get("line", {}).get("label", ""),
+                        part.get("line", {}).get("destination", "")
                     )
                 )
             )
@@ -195,7 +199,7 @@ class Route:
         return self.parts[-1].end
 
 
-def get_route_from_db(origin, destination, arrival_time, type_: Literal["ARRIVAL", "DEPARTURE"]):
+def get_route_from_db(origin, destination, arrival_time, type_: Literal["ARRIVAL", "DEPARTURE"], _try=0):
     response = requests.post("https://www.bahn.de/web/api/angebote/fahrplan", json={
         "abfahrtsHalt": f"@X={
             str(origin[1]).replace('.', '')[:8].ljust(8, '0')
@@ -242,29 +246,40 @@ def get_route_from_db(origin, destination, arrival_time, type_: Literal["ARRIVAL
     except Exception as ex:
         print(ex)
         print(response.status_code, response.headers, response.content)
-        return get_route_from_db(origin, destination, arrival_time, type_)
+        if _try >= MAX_API_RETRIES:
+            return []
+        time.sleep(RETRY_DELAY_SECONDS)
+        return get_route_from_db(origin, destination, arrival_time, type_, _try + 1)
         # raise Exception("Invalid DB API Response") from ex
 
     return [Route.from_db_data(route) for route in response_json.get("verbindungen", [])]
 
 
-def get_route_from_mvg(origin, destination, arrival_time, type_: Literal["ARRIVAL", "DEPARTURE"]):
-    response = requests.get("https://www.mvg.de/api/fib/v2/connection", params={
+def get_route_from_mvg(origin, destination, arrival_time, type_: Literal["ARRIVAL", "DEPARTURE"], _try=0):
+    response = requests.get("https://www.mvg.de/api/bgw-pt/v3/routes", params={
         "originLatitude": origin[0],
         "originLongitude": origin[1],
         "destinationLatitude": destination[0],
         "destinationLongitude": destination[1],
         "routingDateTime": arrival_time.replace(tzinfo=None).isoformat() + "Z",
-        "routingDateTimeIsArrival": type_ == "ARRIVAL",
-        "transportTypes": "SCHIFF,RUFTAXI,BAHN,UBAHN,TRAM,SBAHN,BUS,REGIONAL_BUS"
-    }, headers={"User-Agent": settings.USER_AGENT})
+        "routingDateTimeIsArrival": "true" if type_ == "ARRIVAL" else "false",
+        "transportTypes": "SCHIFF,UBAHN,TRAM,SBAHN,BUS,REGIONAL_BUS,BAHN",
+        "changeSpeed": "NORMAL",
+        "routeType": "LEAST_TIME"
+    }, headers={"User-Agent": settings.USER_AGENT}, timeout=30)
     try:
         response_json = response.json()
     except Exception as ex:
         print(ex)
-        print(response.status_code, response.headers, response.content)
-        return get_route_from_mvg(origin, destination, arrival_time, type_)
-        # raise Exception("Invalid MVG API Response") from ex
+        print(response.status_code, response.content[:300])
+        if _try >= MAX_API_RETRIES:
+            return []
+        time.sleep(RETRY_DELAY_SECONDS)
+        return get_route_from_mvg(origin, destination, arrival_time, type_, _try + 1)
+
+    if not isinstance(response_json, list):
+        print("Unexpected MVG response:", response.status_code, str(response_json)[:300])
+        return []
 
     return [Route.from_mvg_data(route) for route in response_json]
 
